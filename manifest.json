@@ -1,0 +1,17 @@
+{
+  "name": "Urologger — leitura do coletor",
+  "short_name": "Urologger",
+  "description": "Leitura do volume, da coloração e do débito urinário a partir da foto do coletor, com os dados guardados apenas no aparelho.",
+  "lang": "pt-BR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6f9",
+  "theme_color": "#0d6efd",
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="pt-BR" translate="no" class="notranslate">
+<head>
+<meta charset="UTF-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0d6efd">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>Urologger — leitura do coletor</title>
+<style>
+:root{--az:#0d6efd;--vd:#198754;--vm:#dc3545;--am:#ffc107;--cz:#6c757d;--bg:#f4f6f9;--bd:#dee2e6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:#212529}
+.wrap{max-width:1100px;margin:auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd);padding-bottom:12px;margin-bottom:16px;gap:8px;flex-wrap:wrap}
+h3{margin:0;color:var(--az);font-size:1.3rem}
+h6{margin:0 0 12px;color:var(--az);font-size:.95rem;font-weight:700}
+small,.mut{color:var(--cz);font-size:.8rem}
+.badge{background:var(--az);color:#fff;border-radius:20px;padding:5px 12px;font-size:.75rem}
+.card{background:#fff;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.06);padding:16px;margin-bottom:16px}
+.row{display:flex;gap:16px;flex-wrap:wrap}
+.col{flex:1 1 300px;min-width:280px}
+label{display:block;font-size:.78rem;color:#495057;margin:8px 0 3px}
+input,select,button{font:inherit}
+input,select{width:100%;padding:7px 9px;border:1px solid #ced4da;border-radius:6px;font-size:.9rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+button{cursor:pointer;border-radius:8px;border:1px solid transparent;padding:10px 14px;font-weight:600;font-size:.9rem}
+.b1{background:var(--az);color:#fff}.b2{background:#fff;color:var(--az);border-color:var(--az)}
+.b3{background:var(--vd);color:#fff}.b4{background:#fff;color:var(--cz);border-color:var(--bd)}
+.b5{background:var(--vm);color:#fff}
+button:disabled{opacity:.5;cursor:not-allowed}
+canvas#visor{width:100%;max-width:520px;border:2px solid #2b2b2b;border-radius:8px;background:#111;display:block;margin:auto}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th,td{border-bottom:1px solid var(--bd);padding:7px 6px;text-align:left}
+th{background:#f8f9fa;font-weight:600}
+.dot{width:16px;height:16px;border-radius:50%;display:inline-block;border:1px solid #bbb;vertical-align:-3px}
+.alert{border-radius:8px;padding:10px 12px;font-size:.85rem;margin:10px 0}
+.a-ok{background:#d1e7dd;color:#0f5132}.a-warn{background:#fff3cd;color:#664d03}.a-err{background:#f8d7da;color:#842029}
+.chk{display:flex;align-items:center;gap:6px;font-size:.83rem;margin:4px 0}
+.chk input{width:auto}
+.hide{display:none}
+.big{font-size:2rem;font-weight:700;color:var(--vd)}
+input.big{width:5.2em;padding:0 4px;border:1px dashed var(--bd);border-radius:6px;background:#fff;line-height:1.2;text-align:right}
+input.big:focus{border-style:solid;border-color:var(--vd);outline:none}
+.leg{font-size:.75rem;color:var(--cz);margin-top:6px;line-height:1.5}
+.leg b{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px}
+dialog{width:min(560px,calc(100% - 28px));border:0;border-radius:14px;padding:0;box-shadow:0 18px 60px rgba(0,0,0,.28)}
+dialog::backdrop{background:rgba(17,24,39,.62)}
+.guide-head{background:var(--az);color:#fff;padding:14px 16px;font-weight:700}
+.guide-body{padding:16px;line-height:1.45}
+.guide-body ol{margin:0;padding-left:22px}.guide-body li{margin:0 0 8px}
+.guide-actions{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--bd);padding:12px 16px}
+@media print{.noprint{display:none!important}body{background:#fff}.card{box-shadow:none;border:1px solid #ccc}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="noprint">
+  <div><h3>Urologger</h3><small>Leitura conservadora do nível pela escala impressa</small></div>
+  <span class="badge">v7.2 — escala, contraste e OCR local</span>
+</header>
+
+<div class="row noprint">
+  <div class="col">
+    <div class="card">
+      <h6>1. Identificação</h6>
+      <label>Nome completo</label><input id="pName" placeholder="Ex.: Maria da Silva">
+      <div class="grid2">
+        <div><label>Data de nascimento</label><input type="date" id="pDob"></div>
+        <div><label>Peso (kg)</label><input type="number" id="pWeight" value="70" step="0.1"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h6>2. Coletor</h6>
+      <label>Modelo</label><input id="cModel" value="B. Braun 2000 mL">
+      <div class="grid2">
+        <div><label>Volume máximo (mL)</label><input type="number" id="cMax" value="2000"></div>
+        <div><label>Intervalo entre traços (mL)</label><input type="number" id="cStep" value="100"></div>
+      </div>
+      <p class="mut" style="margin:10px 0 0">O intervalo é a diferença de volume entre dois traços vizinhos da escala — no coletor B. Braun, 100 mL, inclusive nos traços curtos não numerados.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="card">
+      <h6>3. Captura</h6>
+      <input type="file" id="fCam" accept="image/*" capture="environment" class="hide">
+      <input type="file" id="fGal" accept="image/*" class="hide">
+      <div class="grid2" style="margin-bottom:12px">
+        <button class="b1" onclick="pick('cam')">Fotografar</button>
+        <button class="b2" onclick="pick('gal')">Escolher arquivo</button>
+      </div>
+      <div class="chk" style="margin-bottom:10px">
+        <input type="checkbox" id="useOcr" checked>
+        <label for="useOcr" style="margin:0">Confirmar os números da escala por OCR (mais lento)</label>
+      </div>
+      <canvas id="visor" width="520" height="380"></canvas>
+      <div class="leg">
+        <b style="background:#198754"></b> coletor localizado &nbsp;
+        <b style="background:#0d6efd"></b> traços detectados &nbsp;
+        <b style="background:#6f42c1"></b> números validados por OCR &nbsp;
+        <b style="background:#dc3545"></b> nível hidroaéreo
+      </div>
+      <div id="msg"></div>
+    </div>
+  </div>
+</div>
+
+<dialog id="guideModal" aria-labelledby="guideTitle">
+  <div class="guide-head" id="guideTitle">Instruções para aquisição da imagem</div>
+  <div class="guide-body">
+    <ol>
+      <li>Use o auxílio do nível/acelerômetro da câmera e mantenha a câmera perpendicular ao coletor.</li>
+      <li>Mantenha o local bem iluminado.</li>
+      <li>Não use flash.</li>
+      <li>Segure firmemente a câmera no momento da aquisição.</li>
+      <li>O coletor deve estar pendurado e nivelado.</li>
+      <li>Não deve haver nenhum artefato na frente do coletor.</li>
+      <li>Enquadre apenas o coletor e alinhe seus bordos aos bordos do campo visual da câmera.</li>
+    </ol>
+  </div>
+  <div class="guide-actions">
+    <button class="b4" type="button" onclick="closeGuide()">Cancelar</button>
+    <button class="b1" type="button" onclick="proceedToCapture()">Entendi, prosseguir</button>
+  </div>
+</dialog>
+
+<div class="card noprint hide" id="secResult">
+  <h6>4. Conferência da leitura</h6>
+  <div class="row">
+    <div class="col">
+      <div class="alert a-ok" id="rOcr">Aguardando a validação da escala por OCR.</div>
+      <p class="mut" style="margin:8px 0 0">A leitura usa apenas valores previstos na escala e escolhe sempre o valor inferior. O campo abaixo é editável: o valor salvo é o que você confirmar.</p>
+      <div style="margin-top:14px">
+        <span class="mut">Volume no coletor</span>
+        <div><input class="big" id="rVol" type="number" inputmode="numeric" step="any" value="0"> <span style="font-weight:600">mL</span></div>
+        <div class="mut" id="rDetail">—</div>
+      </div>
+      <div style="margin-top:10px">
+        <span class="mut">Data/hora da imagem</span>
+        <div id="rTime" style="font-weight:600;font-size:.9rem">—</div>
+      </div>
+      <div style="margin-top:10px">
+        <span class="mut">Coloração</span>
+        <div><span class="dot" id="rDot"></span> <span id="rColor" style="font-weight:600">—</span></div>
+      </div>
+    </div>
+    <div class="col">
+      <h6>Sinais e sintomas</h6>
+      <div class="grid4">
+        <div class="chk"><input type="checkbox" id="s1"><label for="s1" style="margin:0">Dor / disúria</label></div>
+        <div class="chk"><input type="checkbox" id="s2"><label for="s2" style="margin:0">Urgência</label></div>
+        <div class="chk"><input type="checkbox" id="s3"><label for="s3" style="margin:0">Dor lombar</label></div>
+        <div class="chk"><input type="checkbox" id="s4"><label for="s4" style="margin:0">Sede intensa</label></div>
+      </div>
+      <label>Odor</label>
+      <select id="sOdor">
+        <option>Sui generis (sem alteração)</option>
+        <option>Fétido / intenso</option>
+        <option>Adocicado / frutado</option>
+      </select>
+      <label>Houve esvaziamento do coletor após esta foto?</label>
+      <select id="sEmpty">
+        <option value="1">Sim — coletor esvaziado</option>
+        <option value="0">Não — coletor mantido</option>
+      </select>
+      <button class="b3" style="width:100%;margin-top:14px" onclick="saveRecord()">Salvar registro</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <h6 style="margin:0">Histórico</h6>
+    <div class="noprint">
+      <button class="b4" onclick="exportCSV()">CSV</button>
+      <button class="b4" onclick="window.print()">Relatório</button>
+      <button class="b5" onclick="clearAll()">Limpar</button>
+    </div>
+  </div>
+  <div style="overflow-x:auto;margin-top:12px">
+    <table id="tbl"><thead><tr>
+      <th>Data/hora</th><th>Volume</th><th>Diurese</th><th>Débito</th><th>Cor</th><th>Sinais</th>
+    </tr></thead><tbody></tbody></table>
+  </div>
+  <p class="mut" id="empty">Nenhum registro ainda.</p>
+</div>
+
+<div class="card">
+  <h6>Débito urinário (mL/kg/h)</h6>
+  <canvas id="chart" width="900" height="300" style="width:100%"></canvas>
+</div>
+
+<p class="mut" style="text-align:center">Ferramenta de apoio ao cuidado domiciliar. Não substitui avaliação clínica.
+Os dados ficam apenas neste dispositivo — limpar o cache do navegador apaga o histórico.</p>
+
+</div>
+
+<script>
+/* ==========================================================================
+   Urologger v7.2 — processamento de imagem
+   --------------------------------------------------------------------------
+   O que mudou em relação à v7.1 (que rejeitava toda foto):
+
+   1. Os traços da escala eram procurados APENAS em tinta verde-azulada.
+      Agora são procurados por contraste local em qualquer polaridade —
+      impressão clara sobre fundo escuro, escura sobre claro, ou colorida.
+   2. O enquadramento exigia o coletor ocupando 62% da largura E da altura.
+      Coletor é alto e estreito: a exigência era geometricamente impossível.
+      Agora a exigência é de altura, e a largura só precisa ser plausível.
+   3. O OCR só aceitava números de uma lista fixa (2000,1800,…,600). Qualquer
+      coletor que imprima 1500 ou 500 era reprovado. Agora aceita qualquer
+      múltiplo do intervalo declarado.
+   4. O OCR era obrigatório e vinha de CDN. Agora é confirmação opcional,
+      servida do próprio repositório, e a leitura acontece sem ele.
+   5. A leitura nunca é descartada: sai sempre com um grau de confiança
+      declarado e um campo editável para conferência humana.
+
+   Graus de confiança da leitura:
+     alta  — traços regulares + OCR coerente + menisco em ≥2 faixas
+     média — traços regulares + menisco, ancorados pela geometria do coletor
+     baixa — apenas bordas do coletor + menisco (regra de 3)
+   ========================================================================== */
+
+const V = document.getElementById('visor'), VX = V.getContext('2d');
+let img=null, state=null, records=[];
+
+/* ---------- utilidades ---------- */
+const $ = id => document.getElementById(id);
+function msg(t,k){ $('msg').innerHTML = t ? `<div class="alert a-${k}">${t}</div>` : ''; }
+const median = a => { const s=[...a].sort((x,y)=>x-y); const n=s.length;
+                      return n? (n%2? s[(n-1)/2] : (s[n/2-1]+s[n/2])/2) : 0; };
+const medianGap = T => { const d=[]; for(let i=1;i<T.length;i++) d.push(T[i].y-T[i-1].y); return median(d)||1; };
+
+let captureTarget=null;
+function pick(w){
+  captureTarget=w;
+  const d=$('guideModal');
+  if(typeof d.showModal==='function') d.showModal();
+  else d.setAttribute('open','');
+}
+function closeGuide(){
+  const d=$('guideModal');
+  if(typeof d.close==='function') d.close(); else d.removeAttribute('open');
+  captureTarget=null;
+}
+function proceedToCapture(){
+  const target=captureTarget;
+  const d=$('guideModal');
+  if(typeof d.close==='function') d.close(); else d.removeAttribute('open');
+  captureTarget=null;
+  if(target) $(target==='cam'?'fCam':'fGal').click();
+}
+$('fCam').onchange = e => onFile(e.target.files[0]);
+$('fGal').onchange = e => onFile(e.target.files[0]);
+$('guideModal').addEventListener('cancel',()=>{ captureTarget=null; });
+
+for(const id of ['cModel','cMax','cStep']){
+  $(id).addEventListener('change',()=>{
+    if(!state) return;
+    state=null; $('secResult').classList.add('hide');
+    msg('Os dados do coletor foram alterados. Processe a imagem novamente.','warn');
+  });
+}
+
+/* ---------- data/hora: EXIF próprio, sem biblioteca ---------- */
+function exifDate(buf){
+  try{
+    const d = new DataView(buf);
+    if(d.getUint16(0)!==0xFFD8) return null;
+    let off=2;
+    while(off < d.byteLength-4){
+      if(d.getUint8(off)!==0xFF) break;
+      const mk=d.getUint8(off+1), len=d.getUint16(off+2);
+      if(mk===0xE1 && d.getUint32(off+4)===0x45786966){
+        const t=off+10, le=d.getUint16(t)===0x4949;
+        const g16=(p)=>d.getUint16(p,le), g32=(p)=>d.getUint32(p,le);
+        const readIFD=(p)=>{
+          const n=g16(p); let sub=null, dt=null;
+          for(let i=0;i<n;i++){
+            const e=p+2+i*12, tag=g16(e), val=g32(e+8);
+            if(tag===0x8769) sub=t+val;
+            if(tag===0x9003||tag===0x0132){
+              let s='';
+              for(let k=0;k<19;k++) s+=String.fromCharCode(d.getUint8(t+val+k));
+              dt=s;
+            }
+          }
+          return {sub,dt};
+        };
+        let r=readIFD(t+g32(t+4)), s=r.dt;
+        if(r.sub){ const r2=readIFD(r.sub); if(r2.dt) s=r2.dt; }
+        if(s){
+          const m=s.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+          if(m) return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]);
+        }
+      }
+      if(mk===0xDA) break;
+      off += 2+len;
+    }
+  }catch(e){}
+  return null;
+}
+function nameDate(n){
+  const m=n.match(/(\d{4})(\d{2})(\d{2})[_\-]?(\d{2})(\d{2})/);
+  return m ? new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]) : null;
+}
+
+async function onFile(f){
+  if(!f) return;
+  msg('Processando…','warn');
+  const buf = await f.arrayBuffer();
+  const when = exifDate(buf) || nameDate(f.name) || new Date(f.lastModified||Date.now());
+  const url = URL.createObjectURL(new Blob([buf]));
+  img = new Image();
+  img.onload = async () => {
+    URL.revokeObjectURL(url);
+    try{ await analyze(when); }
+    catch(err){
+      console.error(err);
+      state=null; $('secResult').classList.add('hide');
+      msg('O processamento foi interrompido: '+(err.message||'erro não identificado')+'.','err');
+    }
+  };
+  img.src = url;
+}
+
+/* ---------- pipeline ---------- */
+const WORK = 900;
+
+async function analyze(when){
+  const s = WORK/Math.max(img.width,img.height);
+  const w = Math.round(img.width*s), h = Math.round(img.height*s);
+  V.width=w; V.height=h;
+  VX.drawImage(img,0,0,w,h);
+  const px = VX.getImageData(0,0,w,h).data;
+
+  const config=collectorConfig();
+  if(!config.ok){
+    state=null; $('secResult').classList.add('hide');
+    msg('Dados do coletor inválidos: '+config.why,'err'); return;
+  }
+
+  /* Portão 1 — qualidade. Só reprova o que realmente impede a medida. */
+  const q = quality(px,w,h);
+  if(!q.ok){ state=null; $('secResult').classList.add('hide');
+             msg('Foto rejeitada: '+q.why+' Refaça a captura.','err'); return; }
+
+  /* Portão 2 — bordas do coletor. */
+  const collector=locateCollector(px,w,h);
+  if(!collector.ok){
+    state=null; $('secResult').classList.add('hide');
+    msg('Não foi possível delimitar o coletor. '+collector.why,'err'); return;
+  }
+
+  /* Traços da escala — a partir daqui nada mais é obrigatório. */
+  const ticks = detectTicks(px,w,h,collector);
+  const slope = ticks.length>=4 ? tickSlope(px,w,h,ticks,collector) : 0;
+  const angle = Math.atan(slope)*180/Math.PI;
+
+  if(ticks.length>=4 && Math.abs(angle)>3){
+    state=null; $('secResult').classList.add('hide');
+    msg(`Foto rejeitada: escala inclinada ${Math.abs(angle).toFixed(1)}°; o limite é 3°. `+
+        'Use o nível da câmera e mantenha-a perpendicular ao coletor.','err');
+    return;
+  }
+
+  const scale = ticks.length>=4 ? locateScale(ticks,collector,w,h)
+                                : {tickX0:collector.x0,tickX1:collector.x0+Math.round(.18*collector.bw),
+                                   x0:collector.x0,x1:collector.x0+Math.round(.30*collector.bw),
+                                   y0:collector.y0,y1:collector.y1};
+  const xr = ticks.length ? median(ticks.map(t => t.x0+t.bw))
+                          : collector.x0+Math.round(.35*collector.bw);
+
+  /* OCR — confirmação opcional. Falha aqui não interrompe a leitura. */
+  let calibration={ok:false,points:[]}, ocrNota='';
+  if(ticks.length>=4 && $('useOcr').checked){
+    try{
+      msg('Coletor e escala localizados. Confirmando os números impressos por OCR…','warn');
+      const ocr = await recognizeScale(px,w,h,scale,config);
+      calibration = validateOcrScale(ocr.candidates,ticks,config);
+      if(!calibration.ok){
+        const found = ocr.candidates.length ? ocr.candidates.map(p=>p.vol).join(', ') : 'nenhum';
+        ocrNota = `OCR sem confirmação suficiente (números lidos: ${found}). `;
+      }
+    }catch(err){
+      ocrNota = 'OCR indisponível ('+(err.message||'falha')+'). ';
+    }
+  }else if(ticks.length>=4){
+    ocrNota = 'OCR desligado nas opções. ';
+  }
+
+  /* Menisco — este sim é indispensável. */
+  msg('Localizando o nível hidroaéreo…','warn');
+  const men = meniscus(px,w,h,slope,collector,scale,xr);
+  if(!men){
+    state=null; $('secResult').classList.add('hide');
+    msg('O nível hidroaéreo não foi confirmado em pelo menos duas faixas de contraste. '+
+        'Refaça a foto sem reflexos sobre o coletor e com o líquido em repouso.','err');
+    return;
+  }
+
+  const yLevel = men.yRef;
+  const col = sampleColor(px,w,h,xr,yLevel,slope);
+  const confirmedNumbers=[...calibration.points]
+    .sort((a,b)=>Math.abs(a.y-yLevel)-Math.abs(b.y-yLevel)).slice(0,3)
+    .sort((a,b)=>a.y-b.y);
+
+  state = {when,w,h,ticks,slope,xr,men,yLevel,col,collector,scale,
+           calibration,config,confirmedNumbers,ocrNota};
+  recompute();
+}
+
+/* --- crivo de qualidade -------------------------------------------------
+   Limiares afrouxados: a v7.1 exigia variância de laplaciano ≥ 45 numa
+   imagem já reduzida a 900 px, o que reprova foto nítida de bolsa lisa. --- */
+function quality(px,w,h){
+  const g=new Float32Array(w*h);
+  for(let i=0,j=0;i<px.length;i+=4,j++) g[j]=(px[i]*.299+px[i+1]*.587+px[i+2]*.114);
+  let sum=0,sum2=0,n=0;
+  for(let y=1;y<h-1;y+=2) for(let x=1;x<w-1;x+=2){
+    const k=y*w+x;
+    const L=4*g[k]-g[k-1]-g[k+1]-g[k-w]-g[k+w];
+    sum+=L; sum2+=L*L; n++;
+  }
+  const varL = sum2/n - (sum/n)*(sum/n);
+  let dark=0,bright=0;
+  for(let j=0;j<g.length;j+=7){ if(g[j]<22) dark++; if(g[j]>250) bright++; }
+  const tot=Math.ceil(g.length/7);
+  if(varL < 12) return {ok:false, why:`imagem sem nitidez (variância do laplaciano ${varL.toFixed(0)}, mínimo 12).`};
+  if(dark/tot > .80) return {ok:false, why:'imagem subexposta — use mais luz ambiente.'};
+  if(bright/tot > .80) return {ok:false, why:'imagem estourada por reflexo ou flash.'};
+  return {ok:true, varL};
+}
+
+/* --- dados declarados do coletor --------------------------------------- */
+function collectorConfig(){
+  const model=$('cModel').value.trim();
+  const max=Math.round(Number($('cMax').value));
+  const step=Math.round(Number($('cStep').value));
+  if(!model) return {ok:false,why:'informe o modelo.'};
+  if(!Number.isFinite(max)||max<=0) return {ok:false,why:'informe um volume máximo válido.'};
+  if(!Number.isFinite(step)||step<=0) return {ok:false,why:'informe um intervalo válido.'};
+  if(max%step!==0) return {ok:false,why:'o volume máximo deve ser múltiplo do intervalo entre traços.'};
+  return {ok:true,model,max,step,labels:expectedScaleLabels(max,step)};
+}
+
+/* Todo múltiplo do intervalo é um número plausível de estar impresso.
+   A v7.1 fixava a lista em 2000,1800,…,600 e reprovava 1500 e 500. */
+function expectedScaleLabels(max,step){
+  const out=[];
+  for(let v=step; v<=max; v+=step) out.push(v);
+  return out;
+}
+
+/* --- bordas do coletor --------------------------------------------------
+   A exigência de 62% da largura E da altura foi trocada: o que importa é
+   que a coluna graduada apareça inteira na vertical. ---------------------- */
+function locateCollector(px,w,h){
+  const lum=(x,y)=>{ const i=((y*w+x)<<2); return px[i]*.299+px[i+1]*.587+px[i+2]*.114; };
+  const vEdge=x=>{
+    let s=0,n=0;
+    for(let y=Math.round(.08*h);y<Math.round(.92*h);y+=3){ s+=Math.abs(lum(x+2,y)-lum(x-2,y)); n++; }
+    return n?s/n:0;
+  };
+  const hEdge=y=>{
+    let s=0,n=0;
+    for(let x=Math.round(.08*w);x<Math.round(.92*w);x+=3){ s+=Math.abs(lum(x,y+2)-lum(x,y-2)); n++; }
+    return n?s/n:0;
+  };
+  const peak=(a,b,target,scoreFn)=>{
+    let best={at:Math.round(target),raw:0,score:-1};
+    const span=Math.max(1,b-a);
+    for(let p=Math.max(3,Math.round(a));p<=Math.min(Math.round(b),scoreFn===vEdge?w-4:h-4);p++){
+      const raw=scoreFn(p);
+      const proximity=1-Math.min(1,Math.abs(p-target)/span);
+      const score=raw*(.65+.35*proximity);
+      if(score>best.score) best={at:p,raw,score};
+    }
+    return best;
+  };
+
+  const le=peak(.01*w,.42*w,.04*w,vEdge), re=peak(.58*w,.99*w,.96*w,vEdge);
+  const te=peak(.01*h,.25*h,.04*h,hEdge), be=peak(.75*h,.99*h,.96*h,hEdge);
+  let x0=le.raw>=2.5?le.at:Math.round(.015*w);
+  let x1=re.raw>=2.5?re.at:Math.round(.985*w);
+  let y0=te.raw>=2.5?te.at:Math.round(.015*h);
+  let y1=be.raw>=2.5?be.at:Math.round(.985*h);
+
+  /* Caixa implausível (borda interna capturada por engano): usa o quadro. */
+  if(x1-x0 < .12*w){ x0=Math.round(.015*w); x1=Math.round(.985*w); }
+  if(y1-y0 < .45*h){ y0=Math.round(.015*h); y1=Math.round(.985*h); }
+
+  const bw=x1-x0, bh=y1-y0;
+  if(bh < .45*h)
+    return {ok:false,why:'o coletor precisa aparecer inteiro na vertical, de cima a baixo do quadro.'};
+  if(bw < .10*w)
+    return {ok:false,why:'aproxime a câmera: o coletor está estreito demais no quadro.'};
+  return {ok:true,x0,x1,y0,y1,bw,bh,confidence:median([le.raw,re.raw,te.raw,be.raw])};
+}
+
+/* ======================================================================
+   MÁSCARAS DE TINTA — a correção central.
+   A v7.1 usava só tealMask (g > r + k): escala branca ou preta dava zero
+   traço em todos os limiares, e a foto era rejeitada sempre.
+   Agora: fundo local por média móvel horizontal e três canais —
+   tinta escura, tinta clara e tinta verde-azulada.
+   ====================================================================== */
+function grayscale(px,w,h){
+  const g=new Float32Array(w*h);
+  for(let i=0,j=0;i<px.length;i+=4,j++) g[j]=px[i]*.299+px[i+1]*.587+px[i+2]*.114;
+  return g;
+}
+
+/* média móvel horizontal por somas acumuladas — O(w·h) */
+function rowBackground(g,w,h,win){
+  const bg=new Float32Array(w*h), acc=new Float64Array(w+1);
+  const r=Math.max(3,Math.round(win));
+  for(let y=0;y<h;y++){
+    const off=y*w;
+    acc[0]=0;
+    for(let x=0;x<w;x++) acc[x+1]=acc[x]+g[off+x];
+    for(let x=0;x<w;x++){
+      const a=Math.max(0,x-r), b=Math.min(w,x+r+1);
+      bg[off+x]=(acc[b]-acc[a])/(b-a);
+    }
+  }
+  return bg;
+}
+
+function tealMask(px,w,h,k){
+  const m=new Uint8Array(w*h);
+  for(let i=0,j=0;i<px.length;i+=4,j++){
+    const r=px[i],g=px[i+1],b=px[i+2];
+    const sat=Math.max(r,g,b)-Math.min(r,g,b);
+    if(g>r+k && g>=b-30 && sat>k+7 && r<200) m[j]=1;
+  }
+  return m;
+}
+
+function inkMasks(px,w,h,roi){
+  const g=grayscale(px,w,h);
+  const bg=rowBackground(g,w,h,.16*(roi.bw||w));
+  const out=[];
+  for(const t of [30,20,13,8]){
+    const dark=new Uint8Array(w*h), light=new Uint8Array(w*h);
+    for(let j=0;j<w*h;j++){
+      const d=bg[j]-g[j];
+      if(d>t) dark[j]=1; else if(-d>t) light[j]=1;
+    }
+    out.push({name:'escura t'+t, m:dark});
+    out.push({name:'clara t'+t, m:light});
+  }
+  for(const k of [26,18,11]) out.push({name:'verde k'+k, m:tealMask(px,w,h,k)});
+  return out;
+}
+
+/* --- componentes conexos + filtro geométrico --- */
+function components(m,w,h){
+  const lab=new Int32Array(w*h).fill(-1), out=[], st=new Int32Array(w*h);
+  let id=0;
+  for(let j=0;j<w*h;j++){
+    if(!m[j]||lab[j]>=0) continue;
+    let sp=0; st[sp++]=j; lab[j]=id;
+    let x0=j%w,x1=x0,y0=(j/w)|0,y1=y0,cnt=0;
+    while(sp){
+      const p=st[--sp], px_=p%w, py=(p/w)|0; cnt++;
+      if(px_<x0)x0=px_; if(px_>x1)x1=px_; if(py<y0)y0=py; if(py>y1)y1=py;
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const nx=px_+dx, ny=py+dy;
+        if(nx<0||ny<0||nx>=w||ny>=h) continue;
+        const q=ny*w+nx;
+        if(m[q]&&lab[q]<0){ lab[q]=id; st[sp++]=q; }
+      }
+    }
+    out.push({x0,x1,y0,y1,cnt,id}); id++;
+  }
+  return {out,lab};
+}
+
+/* Geometria relativa ao COLETOR, não ao quadro: um traço mede uma fração
+   da largura do coletor, e isso independe do enquadramento. */
+function tickCandidates(mask,w,h,roi){
+  const {out}=components(mask,w,h);
+  const c=[];
+  for(const o of out){
+    const bw=o.x1-o.x0+1, bh=o.y1-o.y0+1;
+    const cx=(o.x0+o.x1)/2, cy=(o.y0+o.y1)/2;
+    if(cx<=roi.x0||cx>=roi.x1||cy<=roi.y0||cy>=roi.y1) continue;
+    if(bw < .030*roi.bw || bw > .55*roi.bw) continue;  // largura plausível
+    if(bh > .022*h) continue;                          // traço é fino
+    if(bw < 2.0*bh) continue;                          // e alongado na horizontal
+    if(o.cnt < bw*.45) continue;                       // preenchido como segmento
+    c.push({y:(o.y0+o.y1)/2, x0:o.x0, bw});
+  }
+  return c;
+}
+
+/* agrupa pela borda esquerda: a escala é uma coluna alinhada */
+function groupColumn(c,roi){
+  const tol=.10*roi.bw;
+  let best=null;
+  for(const ref of c){
+    const sel=c.filter(t=>Math.abs(t.x0-ref.x0)<=tol);
+    if(!best||sel.length>best.length) best=sel;
+  }
+  if(!best||!best.length) return [];
+  best.sort((a,b)=>a.y-b.y);
+  const out=[best[0]];
+  for(let i=1;i<best.length;i++){
+    if(best[i].y-out[out.length-1].y > .006*roi.bh) out.push(best[i]);
+    else if(best[i].bw > out[out.length-1].bw) out[out.length-1]=best[i];
+  }
+  return out;
+}
+
+/* Escala impressa é periódica. Mantém só o maior subconjunto compatível
+   com um passo constante — elimina texto solto e bordas confundidas. */
+function regularize(T){
+  if(T.length<4) return {ticks:T,gap:medianGap(T),score:0};
+  const d=[];
+  for(let i=1;i<T.length;i++) d.push(T[i].y-T[i-1].y);
+  const base=median(d);
+  if(!(base>0)) return {ticks:T,gap:1,score:0};
+  let best={ticks:[],gap:base,score:0};
+  for(const gap of [base,base/2,base*2]){
+    if(!(gap>2)) continue;
+    for(const anchor of T){
+      const keep=new Map();
+      for(const t of T){
+        const k=Math.round((t.y-anchor.y)/gap);
+        const err=Math.abs(t.y-(anchor.y+k*gap));
+        if(err>gap*.28) continue;
+        const prev=keep.get(k);
+        if(!prev||err<prev.err) keep.set(k,{t,err});
+      }
+      const ticks=[...keep.values()].map(v=>v.t).sort((a,b)=>a.y-b.y);
+      const score=ticks.length - (T.length-ticks.length)*.5;
+      if(ticks.length>=4 && score>best.score) best={ticks,gap,score};
+    }
+  }
+  return best.ticks.length>=4 ? best : {ticks:T,gap:base,score:0};
+}
+
+function detectTicks(px,w,h,roi){
+  let best={ticks:[],score:-1,mask:null};
+  for(const {name,m} of inkMasks(px,w,h,roi)){
+    const cand=tickCandidates(m,w,h,roi);
+    if(cand.length<4) continue;
+    const grouped=groupColumn(cand,roi);
+    if(grouped.length<4) continue;
+    const reg=regularize(grouped);
+    const score=reg.ticks.length + reg.score;
+    if(score>best.score) best={ticks:reg.ticks,score,mask:name,gap:reg.gap};
+  }
+  return best.ticks;
+}
+
+/* A v7.1 estendia a região só 10% da largura do coletor além dos traços.
+   Os números impressos ficam fora dessa margem e chegavam cortados ao OCR —
+   "2000" virava "200". Daí a leitura de números que não existem na escala. */
+function locateScale(ticks,collector,w,h){
+  const gap=medianGap(ticks), tickW=median(ticks.map(t=>t.bw));
+  const tickX0=Math.min(...ticks.map(t=>t.x0));
+  const tickX1=Math.max(...ticks.map(t=>t.x0+t.bw));
+  const padX=Math.max(.12*collector.bw,2.5*tickW);
+  return {
+    tickX0,tickX1,
+    x0:Math.max(collector.x0,Math.round(tickX0-padX)),
+    x1:Math.min(collector.x1,Math.round(tickX1+Math.max(.45*collector.bw,6*tickW))),
+    y0:Math.max(collector.y0,Math.round(ticks[0].y-1.5*gap)),
+    y1:Math.min(collector.y1,Math.round(ticks[ticks.length-1].y+1.5*gap))
+  };
+}
+
+/* inclinação medida nos próprios traços, em qualquer polaridade */
+function tickSlope(px,w,h,ticks,roi){
+  const sl=[];
+  for(const {m} of inkMasks(px,w,h,roi)){
+    for(const t of ticks){
+      let sx=0,sy=0,sxx=0,sxy=0,n=0;
+      const yA=Math.max(0,Math.round(t.y)-6), yB=Math.min(h-1,Math.round(t.y)+6);
+      for(let y=yA;y<=yB;y++) for(let x=t.x0;x<t.x0+t.bw && x<w;x++)
+        if(m[y*w+x]){ sx+=x; sy+=y; sxx+=x*x; sxy+=x*y; n++; }
+      if(n>12){
+        const den=n*sxx-sx*sx;
+        if(Math.abs(den)>1e-6) sl.push((n*sxy-sx*sy)/den);
+      }
+    }
+    if(sl.length>=6) break;
+  }
+  if(!sl.length) return 0;
+  return median(sl);
+}
+
+/* ---------- OCR local, opcional ---------- */
+const OCR_PATHS={
+  script:'vendor/tesseract/tesseract.min.js',
+  worker:'vendor/tesseract/worker.min.js',
+  core:'vendor/tesseract/core/',
+  lang:'vendor/tesseract/lang/'
+};
+let ocrLoader=null;
+
+function ensureTesseract(){
+  if(window.Tesseract) return Promise.resolve(window.Tesseract);
+  if(ocrLoader) return ocrLoader;
+  ocrLoader=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=OCR_PATHS.script;
+    s.onload=()=>window.Tesseract?resolve(window.Tesseract):reject(new Error('biblioteca OCR não carregada'));
+    s.onerror=()=>reject(new Error('arquivo local do OCR não encontrado'));
+    document.head.appendChild(s);
+  });
+  return ocrLoader;
+}
+
+function makeOcrCanvas(px,w,h,scale){
+  const roi={x0:Math.max(0,Math.floor(scale.x0)),x1:Math.min(w,Math.ceil(scale.x1)),
+             y0:Math.max(0,Math.floor(scale.y0)),y1:Math.min(h,Math.ceil(scale.y1))};
+  const rw=roi.x1-roi.x0, rh=roi.y1-roi.y0, pad=10, zoom=3;
+  const base=document.createElement('canvas'); base.width=rw+2*pad; base.height=rh+2*pad;
+  const bx=base.getContext('2d'), out=bx.createImageData(base.width,base.height);
+  out.data.fill(255);
+
+  /* binariza por contraste local, sem supor a cor da tinta */
+  const g=new Float32Array(rw*rh);
+  for(let y=0;y<rh;y++) for(let x=0;x<rw;x++){
+    const i=(((roi.y0+y)*w+(roi.x0+x))<<2);
+    g[y*rw+x]=px[i]*.299+px[i+1]*.587+px[i+2]*.114;
+  }
+  const bg=rowBackground(g,rw,rh,Math.max(6,.35*rw));
+  let pos=0,neg=0;
+  for(let j=0;j<rw*rh;j++){ const d=bg[j]-g[j]; if(d>14) pos++; else if(-d>14) neg++; }
+  const escura = pos>=neg;                       // polaridade dominante da tinta
+  const ink=new Uint8Array(rw*rh);
+  for(let j=0;j<rw*rh;j++){
+    const d=escura ? bg[j]-g[j] : g[j]-bg[j];
+    if(d>12) ink[j]=1;
+  }
+  for(let y=0;y<rh;y++) for(let x=0;x<rw;x++){
+    let on=0;
+    for(let dy=-1;dy<=1&&!on;dy++) for(let dx=-1;dx<=1;dx++){
+      const xx=x+dx,yy=y+dy;
+      if(xx>=0&&yy>=0&&xx<rw&&yy<rh&&ink[yy*rw+xx]){on=1;break;}
+    }
+    if(on){
+      const p=(((y+pad)*base.width+(x+pad))<<2);
+      out.data[p]=out.data[p+1]=out.data[p+2]=0; out.data[p+3]=255;
+    }
+  }
+  bx.putImageData(out,0,0);
+  const canvas=document.createElement('canvas');
+  canvas.width=base.width*zoom; canvas.height=base.height*zoom;
+  const cx=canvas.getContext('2d'); cx.imageSmoothingEnabled=false;
+  cx.drawImage(base,0,0,canvas.width,canvas.height);
+  return {canvas,roi,pad,zoom};
+}
+
+function parseOcrCandidates(data,prep,config){
+  const allowed=new Set(config.labels), items=[];
+  const words=(data&&data.words)||[];
+  for(const word of words){
+    if(!word.bbox) continue;
+    const digits=String(word.text||'').replace(/\D/g,'');
+    if(!digits) continue;
+    const x=prep.roi.x0+((word.bbox.x0+word.bbox.x1)/2/prep.zoom-prep.pad);
+    const y=prep.roi.y0+((word.bbox.y0+word.bbox.y1)/2/prep.zoom-prep.pad);
+    const hh=(word.bbox.y1-word.bbox.y0)/prep.zoom;
+    items.push({digits,x,y,h:hh,confidence:Number(word.confidence)||0});
+  }
+
+  const candidates=[];
+  for(const item of items){
+    const n=Number(item.digits);
+    if(allowed.has(n)) candidates.push({...item,vol:n});
+  }
+  /* alguns aparelhos separam os algarismos: recompõe por linha */
+  const rows=[];
+  for(const item of [...items].sort((a,b)=>a.y-b.y)){
+    let row=rows.find(r=>Math.abs(r.y-item.y)<=Math.max(5,.65*Math.max(r.h,item.h)));
+    if(!row){row={y:item.y,h:item.h,items:[]};rows.push(row);}
+    row.items.push(item); row.y=median(row.items.map(i=>i.y)); row.h=median(row.items.map(i=>i.h));
+  }
+  for(const row of rows){
+    const joined=row.items.sort((a,b)=>a.x-b.x).map(i=>i.digits).join('');
+    const n=Number(joined);
+    if(allowed.has(n)) candidates.push({vol:n,y:row.y,x:median(row.items.map(i=>i.x)),
+      confidence:median(row.items.map(i=>i.confidence)),digits:joined});
+  }
+  const unique=[];
+  for(const c of candidates.sort((a,b)=>b.confidence-a.confidence)){
+    if(!unique.some(u=>u.vol===c.vol&&Math.abs(u.y-c.y)<8)) unique.push(c);
+  }
+  return unique.sort((a,b)=>a.y-b.y);
+}
+
+async function recognizeScale(px,w,h,scale,config){
+  const Tesseract=await ensureTesseract();
+  const prep=makeOcrCanvas(px,w,h,scale);
+  let worker=null;
+  try{
+    worker=await Tesseract.createWorker('eng',1,{
+      workerPath:OCR_PATHS.worker, corePath:OCR_PATHS.core, langPath:OCR_PATHS.lang,
+      logger:m=>{ if(m.status==='recognizing text'&&m.progress>.5)
+        msg(`Confirmando os números da escala… ${Math.round(m.progress*100)}%`,'warn'); }
+    });
+    await worker.setParameters({tessedit_char_whitelist:'0123456789',
+      tessedit_pageseg_mode:'11',user_defined_dpi:'300'});
+    const result=await worker.recognize(prep.canvas);
+    return {candidates:parseOcrCandidates(result.data,prep,config),text:(result.data.text||'').trim()};
+  }finally{
+    if(worker) await worker.terminate();
+  }
+}
+
+/* Dois números coerentes já bastam, desde que distantes na escala —
+   a v7.1 exigia três e reprovava coletores com poucos números impressos. */
+function validateOcrScale(candidates,ticks,config){
+  const gap=medianGap(ticks), tol=Math.max(8,.80*gap), mapped=[];
+  for(const c of candidates){
+    let idx=0,dist=Infinity;
+    ticks.forEach((t,i)=>{const d=Math.abs(t.y-c.y); if(d<dist){dist=d;idx=i;}});
+    if(dist<=tol) mapped.push({...c,idx,dist});
+  }
+  let best=[];
+  for(const anchor of mapped){
+    const intercept=anchor.vol+anchor.idx*config.step;
+    let inliers=mapped.filter(p=>Math.abs((intercept-p.idx*config.step)-p.vol)<=config.step*.20);
+    const seenV=new Set(),seenI=new Set();
+    inliers=inliers.sort((a,b)=>b.confidence-a.confidence).filter(p=>{
+      if(seenV.has(p.vol)||seenI.has(p.idx)) return false;
+      seenV.add(p.vol);seenI.add(p.idx);return true;
+    }).sort((a,b)=>a.idx-b.idx);
+    if(inliers.length>best.length) best=inliers;
+  }
+  const spread = best.length>=2 ? best[best.length-1].idx-best[0].idx : 0;
+  if(best.length<2 || (best.length===2 && spread<3)) return {ok:false,points:best};
+  const intercept=median(best.map(p=>p.vol+p.idx*config.step));
+  return {ok:true,points:best,intercept};
+}
+
+/* --- menisco: consenso da transição claro -> escuro em três faixas --- */
+function meniscus(px,w,h,slope,collector,scale,xr){
+  let cleanX0=Math.max(scale.x1+Math.round(.02*collector.bw),
+                       collector.x0+Math.round(.30*collector.bw));
+  let cleanX1=collector.x1-Math.round(.04*collector.bw);
+  if(cleanX1-cleanX0 < .28*collector.bw){
+    cleanX0=collector.x0+Math.round(.35*collector.bw);
+    cleanX1=collector.x1-Math.round(.03*collector.bw);
+  }
+  const cleanW=cleanX1-cleanX0;
+  if(cleanW<.18*collector.bw) return null;
+  const fractions=[[.02,.28],[.37,.63],[.72,.98]];
+  const bands=fractions.map(([a,b])=>({x0:Math.round(cleanX0+a*cleanW),
+                                       x1:Math.round(cleanX0+b*cleanW)}));
+  const offsets=[5,9,13], candidates=[];
+  const pixel=(x,y)=>{
+    const i=((y*w+x)<<2),r=px[i],g=px[i+1],b=px[i+2];
+    const sat=Math.max(r,g,b)-Math.min(r,g,b);
+    if(g>r+8&&g>=b-30&&sat>12) return null;
+    return {lum:r*.299+g*.587+b*.114, yellow:(r+g)/2-b};
+  };
+
+  for(const band of bands){
+    const scoreAt=(yRef,distances)=>{
+      const aL=[],bL=[],aY=[],bY=[];
+      for(let x=band.x0;x<band.x1;x+=3){
+        const line=yRef+slope*(x-xr);
+        for(const d of distances){
+          const ya=Math.round(line-d), yb=Math.round(line+d);
+          if(ya<0||yb>=h) continue;
+          const a=pixel(x,ya), b=pixel(x,yb);
+          if(!a||!b) continue;
+          aL.push(a.lum);bL.push(b.lum);aY.push(a.yellow);bY.push(b.yellow);
+        }
+      }
+      if(aL.length<Math.max(12,(band.x1-band.x0)/4)) return -Infinity;
+      const darkening=(median(aL)-median(bL))/255;
+      const yellowing=Math.max(0,(median(bY)-median(aY))/128);
+      return darkening+.30*yellowing;
+    };
+    let best={y:null,score:-Infinity};
+    for(let yRef=collector.y0+16;yRef<=collector.y1-16;yRef++){
+      const score=scoreAt(yRef,offsets);
+      if(score>best.score) best={y:yRef,score};
+    }
+    if(best.y!==null){
+      let refined={y:best.y,score:-Infinity};
+      for(let yRef=Math.max(collector.y0+5,best.y-16);
+          yRef<=Math.min(collector.y1-5,best.y+16);yRef++){
+        const score=scoreAt(yRef,[1,2,3,4]);
+        if(score>refined.score+1e-9 ||
+           (Math.abs(score-refined.score)<=1e-9&&yRef>refined.y)) refined={y:yRef,score};
+      }
+      best=refined;
+    }
+    if(best.y!==null&&best.score>.020) candidates.push({...band,...best});
+  }
+  if(candidates.length<2) return null;
+  const center=median(candidates.map(c=>c.y));
+  const tolerance=Math.max(8,.035*collector.bh);
+  const inliers=candidates.filter(c=>Math.abs(c.y-center)<=tolerance);
+  if(inliers.length<2) return null;
+  const weight=inliers.reduce((s,c)=>s+Math.max(.001,c.score),0);
+  const yRef=inliers.reduce((s,c)=>s+c.y*Math.max(.001,c.score),0)/weight;
+  return {yRef:Math.round(yRef),x0:cleanX0,x1:cleanX1,candidates,inliers,
+          strength:median(inliers.map(c=>c.score))};
+}
+
+/* ---------- volume: três níveis de confiança ---------- */
+
+/* Regra de 3 na altura do coletor — o Método 3 da especificação. */
+function geometricVolume(collector,y,config){
+  const frac=(collector.y1-y)/collector.bh;
+  return Math.max(0,Math.min(config.max, config.max*frac));
+}
+
+function readVolume(state){
+  const {ticks,yLevel,calibration,config,collector}=state;
+  const gap=ticks.length>=4 ? medianGap(ticks) : null;
+
+  /* alta — escala ancorada pelos números lidos */
+  if(calibration.ok && ticks.length>=4){
+    const r=ladderVolume(ticks,yLevel,calibration.intercept,config,gap);
+    if(r) return {...r, nivel:'alta',
+      base:`escala confirmada por OCR (${calibration.points.length} números), `+
+           `${ticks.length} traços e menisco em ${state.men.inliers.length} de 3 faixas`};
+  }
+
+  /* média — o passo em pixels dos traços vale exatamente um intervalo em mL.
+     Falta só a âncora absoluta. O fundo do coletor é o zero: contar quantos
+     passos cabem entre o fundo e cada traço dá a escala inteira, com erro
+     muito menor do que a proporção de altura do corpo (que ignora as
+     margens sem graduação em cima e embaixo). */
+  if(ticks.length>=4){
+    const geo=geometricVolume(collector,yLevel,config);
+    const intercept=config.step*Math.round((collector.y1-ticks[0].y)/gap);
+    const r=ladderVolume(ticks,yLevel,intercept,config,gap);
+    /* confere contra a proporção de altura; discordância grande derruba o nível */
+    if(r && Math.abs(r.raw-geo) <= Math.max(2*config.step,.18*config.max))
+      return {...r, nivel:'média',
+        base:`${ticks.length} traços regulares (passo de ${gap.toFixed(1)} px = ${config.step} mL) `+
+             `ancorados no fundo do coletor, conferidos contra a altura total `+
+             `(${Math.round(geo)} mL); sem confirmação por OCR`};
+  }
+
+  /* baixa — só bordas do coletor e menisco */
+  const raw=geometricVolume(collector,yLevel,config);
+  return {volume:Math.max(0,Math.floor((raw+config.step*.015)/config.step)*config.step),
+          raw, detail:'proporção de altura do coletor', nivel:'baixa',
+          base:'nenhuma escala impressa foi detectada; leitura por proporção de altura'};
+}
+
+/* leitura conservadora sobre a escada de traços */
+function ladderVolume(ticks,y,intercept,config,gap){
+  const volOf=i=>intercept-i*config.step;
+  let raw,detail;
+  if(y<=ticks[0].y){
+    raw=volOf(0)+(ticks[0].y-y)/gap*config.step;
+    detail=`nível acima do traço ${Math.round(volOf(0))} mL`;
+  }else if(y>=ticks[ticks.length-1].y){
+    raw=volOf(ticks.length-1)-(y-ticks[ticks.length-1].y)/gap*config.step;
+    detail=`nível abaixo do traço ${Math.round(volOf(ticks.length-1))} mL`;
+  }else{
+    for(let i=0;i<ticks.length-1;i++) if(ticks[i].y<=y&&y<=ticks[i+1].y){
+      const r=(y-ticks[i].y)/(ticks[i+1].y-ticks[i].y);
+      raw=volOf(i)-r*config.step;
+      const upper=Math.round(volOf(i)), lower=Math.round(volOf(i+1));
+      detail=r<.04?`nível sobre o traço ${upper} mL`:
+        `nível abaixo de ${upper} mL; próximo traço inferior: ${lower} mL`;
+      break;
+    }
+  }
+  if(!Number.isFinite(raw)) return null;
+  const volume=Math.max(0,Math.min(config.max,
+    Math.floor((raw+config.step*.015)/config.step)*config.step));
+  return {volume,raw,detail};
+}
+
+function recompute(){
+  if(!state) return;
+  const reading=readVolume(state);
+  state.volume=reading.volume;
+  state.nivel=reading.nivel;
+
+  const cls={alta:'a-ok', 'média':'a-warn', baixa:'a-err'}[reading.nivel];
+  const rotulo={alta:'Confiança alta — tripla validação',
+                'média':'Confiança média — confira o valor',
+                baixa:'Confiança baixa — confira o valor'}[reading.nivel];
+  $('rOcr').className='alert '+cls;
+  $('rOcr').innerHTML=`<b>${rotulo}.</b> ${state.ocrNota||''}${reading.base}.`;
+
+  $('rVol').value=reading.volume;
+  $('rDetail').textContent=reading.detail+' · leitura conservadora pelo valor inferior da escala · '+
+    `${state.ticks.length} traços · inclinação ${(Math.atan(state.slope)*180/Math.PI).toFixed(1)}°`;
+  $('rTime').textContent=state.when.toLocaleString('pt-BR');
+  $('rDot').style.background=state.col.hex;
+  $('rColor').textContent=state.col.name;
+  draw();
+  $('secResult').classList.remove('hide');
+  msg('Processamento concluído. Confira o volume antes de salvar.','ok');
+}
+
+/* ---------- cor da urina, amostrada abaixo do menisco ---------- */
+function sampleColor(px,w,h,xr,yLevel,slope){
+  const rs=[],gs=[],bs=[];
+  for(let dx=Math.round(.05*w); dx<.20*w; dx+=3){
+    const x=Math.round(xr+dx);
+    for(let dy=25; dy<70; dy+=4){
+      const y=Math.round(yLevel+slope*dx+dy);
+      if(x<0||y<0||x>=w||y>=h) continue;
+      const i=(y*w+x)<<2;
+      rs.push(px[i]); gs.push(px[i+1]); bs.push(px[i+2]);
+    }
+  }
+  if(!rs.length) return {name:'não avaliada', hex:'#cccccc'};
+  const r=median(rs), g=median(gs), b=median(bs);
+  const hex='#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+  const sat=Math.max(r,g,b)-Math.min(r,g,b);
+  let name;
+  if(sat<28 && r>170) name='Incolor / muito diluída';
+  else if(r>190 && g>175 && b>110) name='Amarelo claro / citrino';
+  else if(r>150 && g>110 && b<110) name='Âmbar / amarelo escuro';
+  else if(r>120 && g<90 && b<90) name='Avermelhado — verificar hematúria';
+  else if(r<95 && g<95) name='Escuro / concentrado';
+  else name='Castanho — verificar colúria';
+  return {name, hex};
+}
+
+/* ---------- desenho ---------- */
+function draw(){
+  const w=state.w,h=state.h;
+  VX.drawImage(img,0,0,w,h);
+  const c=state.collector,s=state.scale,T=state.ticks;
+  VX.strokeStyle='#198754';VX.lineWidth=3;
+  VX.strokeRect(c.x0,c.y0,c.bw,c.bh);
+  if(T.length){
+    VX.strokeStyle='#6f42c1';VX.lineWidth=2;
+    VX.strokeRect(s.x0,s.y0,s.x1-s.x0,s.y1-s.y0);
+    VX.lineWidth=3; VX.strokeStyle='#0d6efd';
+    T.forEach(t=>{ VX.beginPath(); VX.moveTo(t.x0,t.y); VX.lineTo(t.x0+t.bw,t.y); VX.stroke(); });
+  }
+  VX.fillStyle='#6f42c1';VX.font='bold 14px sans-serif';
+  state.calibration.points.forEach(p=>{
+    VX.beginPath();VX.arc(Math.max(s.x0+7,s.tickX0-8),p.y,5,0,Math.PI*2);VX.fill();
+    VX.fillText(String(p.vol),s.x0+4,Math.max(14,p.y-7));
+  });
+  const m=state.men;
+  VX.strokeStyle='#dc3545'; VX.lineWidth=4;
+  VX.beginPath();
+  VX.moveTo(m.x0,m.yRef+state.slope*(m.x0-state.xr));
+  VX.lineTo(m.x1,m.yRef+state.slope*(m.x1-state.xr));
+  VX.stroke();
+}
+
+/* ---------- registros ---------- */
+function saveRecord(){
+  if(!state) return;
+  /* o valor salvo é o que está no campo — a conferência humana prevalece */
+  let vol=Math.round(Number($('rVol').value));
+  if(!Number.isFinite(vol)||vol<0){ msg('Informe um volume válido antes de salvar.','err'); return; }
+  vol=Math.min(state.config.max, Math.round(vol/state.config.step)*state.config.step);
+  const emptied = $('sEmpty').value === '1';
+  const sy=[];
+  if($('s1').checked) sy.push('Disúria');
+  if($('s2').checked) sy.push('Urgência');
+  if($('s3').checked) sy.push('Dor lombar');
+  if($('s4').checked) sy.push('Sede intensa');
+  sy.push($('sOdor').value);
+  records.push({t:state.when.getTime(), vol, colorName:state.col.name,
+                colorHex:state.col.hex, sy:sy.join(', '), emptied, nivel:state.nivel});
+  records.sort((a,b)=>a.t-b.t);
+  persist(); render();
+  $('secResult').classList.add('hide');
+  msg('Registro salvo.','ok');
+}
+
+/* diurese = o que foi produzido desde a medida anterior. */
+function computed(){
+  const kg = +$('pWeight').value || 70;
+  return records.map((r,i)=>{
+    if(i===0) return {...r, diur:null, deb:null};
+    const p=records[i-1];
+    const hrs=(r.t-p.t)/3.6e6;
+    const diur = p.emptied ? r.vol : r.vol - p.vol;
+    const deb = (hrs>0 && diur>=0) ? diur/kg/hrs : null;
+    return {...r, diur, deb, hrs};
+  });
+}
+
+function render(){
+  const rows=computed(), tb=document.querySelector('#tbl tbody');
+  tb.innerHTML='';
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${new Date(r.t).toLocaleString('pt-BR')}</td>
+      <td><b>≈ ${r.vol} mL</b>${r.nivel&&r.nivel!=='alta'?` <small class="mut">(${r.nivel})</small>`:''}</td>
+      <td>${r.diur===null?'—':(r.diur<0?'<span style="color:#dc3545">negativa</span>':r.diur+' mL')}</td>
+      <td>${r.deb===null?'—':r.deb.toFixed(2)}</td>
+      <td><span class="dot" style="background:${r.colorHex}"></span> ${r.colorName}</td>
+      <td><small>${r.sy}</small></td>`;
+    tb.appendChild(tr);
+  });
+  $('empty').style.display = rows.length ? 'none' : 'block';
+  chart(rows);
+}
+
+function chart(rows){
+  const c=$('chart'), x=c.getContext('2d'), W=c.width, H=c.height, P=44;
+  x.clearRect(0,0,W,H);
+  const pts=rows.filter(r=>r.deb!==null);
+  x.strokeStyle='#ced4da'; x.lineWidth=1;
+  x.beginPath(); x.moveTo(P,10); x.lineTo(P,H-P); x.lineTo(W-10,H-P); x.stroke();
+  if(pts.length<1){ x.fillStyle='#6c757d'; x.font='14px sans-serif';
+    x.fillText('Sem dados suficientes para a curva.',P+12,H/2); return; }
+  const mx=Math.max(1.2, ...pts.map(p=>p.deb))*1.15;
+  x.fillStyle='#6c757d'; x.font='11px sans-serif';
+  for(let i=0;i<=4;i++){
+    const v=mx*i/4, y=H-P-(H-P-14)*(i/4);
+    x.fillText(v.toFixed(1),6,y+4);
+    x.strokeStyle='#f1f3f5'; x.beginPath(); x.moveTo(P,y); x.lineTo(W-10,y); x.stroke();
+  }
+  const yo=H-P-(H-P-14)*(0.5/mx);
+  x.strokeStyle='#dc3545'; x.setLineDash([5,4]);
+  x.beginPath(); x.moveTo(P,yo); x.lineTo(W-10,yo); x.stroke(); x.setLineDash([]);
+  x.fillStyle='#dc3545'; x.fillText('0,5 mL/kg/h',W-100,yo-5);
+  const sx=i=>P+(W-P-20)*(pts.length===1?0.5:i/(pts.length-1));
+  const sy=v=>H-P-(H-P-14)*(v/mx);
+  x.strokeStyle='#0d6efd'; x.lineWidth=2.5; x.beginPath();
+  pts.forEach((p,i)=> i?x.lineTo(sx(i),sy(p.deb)):x.moveTo(sx(i),sy(p.deb)));
+  x.stroke();
+  x.fillStyle='#0d6efd';
+  pts.forEach((p,i)=>{ x.beginPath(); x.arc(sx(i),sy(p.deb),4,0,7); x.fill(); });
+  x.fillStyle='#6c757d';
+  pts.forEach((p,i)=>{ if(i%Math.ceil(pts.length/6)===0)
+    x.fillText(new Date(p.t).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),sx(i)-16,H-P+16); });
+}
+
+function exportCSV(){
+  const rows=computed();
+  let csv='data_hora,volume_aproximado_mL,confianca,diurese_mL,debito_mL_kg_h,coloracao,sinais,esvaziado\n';
+  rows.forEach(r=>{
+    csv+=`"${new Date(r.t).toISOString()}",${r.vol},"${r.nivel||''}",${r.diur??''},`+
+         `${r.deb!=null?r.deb.toFixed(2):''},"${r.colorName}","${r.sy}",${r.emptied?'sim':'nao'}\n`;
+  });
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='urologger_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+}
+
+function clearAll(){
+  if(!confirm('Apagar todos os registros deste dispositivo?')) return;
+  records=[]; persist(); render();
+}
+
+function persist(){ try{ localStorage.setItem('urologger_v7', JSON.stringify(records)); }catch(e){} }
+function restore(){ try{ records = JSON.parse(localStorage.getItem('urologger_v7'))||[]; }catch(e){ records=[]; } }
+
+/* ---------- PWA ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('service-worker.js').catch(e=>console.warn('SW:',e));
+  });
+}
+
+restore(); render();
+</script>
+</body>
+</html>
