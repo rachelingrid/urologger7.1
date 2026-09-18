@@ -5,7 +5,7 @@
    Chart.js e jsPDF, que o aplicativo não usa mais. Aqui cada arquivo é
    cacheado individualmente, e o essencial nunca depende do opcional. */
 
-const CACHE = 'urologger-v7.4';
+const CACHE = 'urologger-v7.6';
 
 /* Sem estes o aplicativo não abre. */
 const ESSENCIAIS = [
@@ -50,26 +50,53 @@ self.addEventListener('activate', e => {
   })());
 });
 
-/* Cache primeiro (funciona offline); rede em segundo plano para atualizar. */
+/* Estratégia por tipo de recurso.
+
+   A página (HTML) vai à REDE PRIMEIRO. A versão anterior era cache-primeiro
+   para tudo, e isso tem uma consequência cruel: depois de publicar um
+   index.html novo, o celular continuava mostrando o antigo indefinidamente —
+   o aplicativo parecia não ter sido atualizado. Agora, havendo rede, a página
+   é sempre a publicada; sem rede, vem do cache e tudo continua funcionando.
+
+   Os arquivos pesados do OCR vão a cache primeiro: são imutáveis dentro de
+   uma versão e baixá-los de novo a cada abertura seria desperdício. */
+
+function ehPagina(req){
+  return req.mode === 'navigate' ||
+         (req.headers.get('accept') || '').includes('text/html');
+}
+
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
 
+  if (ehPagina(req)) {
+    e.respondWith((async () => {
+      const cache = await caches.open(CACHE);
+      try {
+        const res = await fetch(req, { cache: 'no-store' });
+        if (res && res.ok) cache.put(req, res.clone());
+        return res;
+      } catch (err) {
+        const hit = await cache.match(req, { ignoreSearch: true }) ||
+                    await cache.match('./index.html');
+        if (hit) return hit;
+        return new Response('Página indisponível offline.', { status: 503 });
+      }
+    })());
+    return;
+  }
+
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const hit = await cache.match(req, { ignoreSearch: true });
-    const rede = fetch(req).then(res => {
+    if (hit) return hit;
+    try {
+      const res = await fetch(req);
       if (res && res.ok) cache.put(req, res.clone());
       return res;
-    }).catch(() => null);
-
-    if (hit) return hit;
-    const res = await rede;
-    if (res) return res;
-    if (req.mode === 'navigate') {
-      const inicio = await cache.match('./index.html');
-      if (inicio) return inicio;
+    } catch (err) {
+      return new Response('Recurso indisponível offline.', { status: 503 });
     }
-    return new Response('Recurso indisponível offline.', { status: 503, statusText: 'Offline' });
   })());
 });

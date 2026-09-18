@@ -41,12 +41,50 @@ exatamente como digitado, sem arredondar para a escala.
 
 ### Quando a leitura automática não sai
 
-Nenhuma foto é descartada. A tela de conferência abre do mesmo jeito, com o
-campo de volume vazio para digitação, e o registro vale como qualquer outro,
-marcado como **manual**. Junto vem o diagnóstico do que falhou — nitidez
-medida, proporção do coletor no quadro, número de traços encontrados, números
-lidos pelo OCR, faixas em que o nível foi confirmado —, que serve tanto para
-corrigir a próxima captura quanto para ajustar os limiares do código.
+Nenhuma foto é descartada. Abre-se sozinha uma **caixa de diálogo de registro
+manual**, já preenchida com o que a foto entregou — data e hora da aquisição,
+aparelho, coloração estimada — deixando só o volume para você. O registro
+entra no histórico como qualquer outro, marcado como **manual**, e conta para
+o débito. Dentro dela fica o diagnóstico do que falhou: nitidez medida,
+proporção do coletor no quadro, traços encontrados, números lidos pelo OCR e
+faixas em que o nível foi confirmado.
+
+### Por que a leitura automática às vezes não sai — de propósito
+
+A escada de traços dá o passo da escala, não a âncora absoluta. Ancorá-la no
+fundo do coletor só vale quando o fundo do coletor é o fundo do quadro; numa
+bolsa pendurada com chão e móvel atrás, a caixa detectada não é o recipiente, e
+a conferência pela proporção de altura — que usa **a mesma caixa** — concorda
+com o erro em vez de denunciá-lo. Duas estimativas que compartilham a premissa
+falsa não são duas estimativas.
+
+Por isso a única âncora independente são os números impressos: a reta
+`volume(y)` é ajustada sobre as posições em pixel onde o OCR os leu. Só há
+leitura automática quando essa reta e a escada de traços concordam dentro de um
+intervalo da escala. Sem concordância, o aplicativo **não arrisca um número**:
+abre o registro manual e mostra as estimativas apenas como referência, cada uma
+identificada pela sua origem. Numa medida de diurese, um valor plausível e
+errado é pior que nenhum — subestimar volume esconde oligúria.
+
+Em bolsa flexível fotografada à mão isso acontece com frequência. O caminho da
+leitura confiável é o coletor rígido em suporte padronizado, com a escala
+inteira e nítida no quadro.
+
+### Como o nível é localizado
+
+Seis faixas verticais estreitas à direita dos traços procuram, cada uma por si,
+a transição claro→escuro com reforço de amarelo. O que decide não é a
+intensidade: é a **concordância**. Um nível de líquido é horizontal e aparece
+na mesma altura em várias faixas; uma torneira, uma etiqueta ou o vinco da
+bolsa aparecem só na sua. Vence o maior aglomerado de faixas que apontam a
+mesma altura — empate se decide pela largura coberta e depois pela pontuação.
+
+Duas correções desta versão nasceram de uma foto real de bolsa B|BRAUN que era
+reprovada com o nível perfeitamente visível: a área de busca do nível não pode
+ser derivada da janela do OCR (que é larga de propósito, e sobrava só a tira da
+extrema direita, onde ficam marca, selo CE e pictogramas); e o consenso não
+pode ser por mediana, porque os artefatos pontuam mais alto que a interface
+ar-líquido e arrastavam a mediana para uma altura onde ninguém concordava.
 
 ### Data e hora: os metadados da foto são aproveitados
 
@@ -97,6 +135,21 @@ vendor/tesseract/          OCR local (Tesseract.js, Apache-2.0)
   core/                    núcleo WebAssembly
   lang/eng.traineddata.gz  modelo de dígitos
 ```
+
+## Selo de integridade
+
+O distintivo no alto da tela começa como **"v7.4 — carregando…"** e só vira
+**"v7.4 ✓"** na última instrução do arquivo. Se ele não mudar, o `index.html`
+que chegou ao servidor está incompleto — cortado no envio — e nenhum botão vai
+responder. É a primeira coisa a conferir quando o aplicativo parece morto.
+
+Qualquer erro em tempo de execução também aparece numa caixa vermelha na área
+de mensagens, em vez de deixar os botões mudos.
+
+A tela de instruções é um overlay comum, não o elemento `<dialog>`: se ela
+falhar por qualquer motivo, a captura acontece do mesmo jeito. E o campo de
+arquivo é zerado antes de cada abertura, para que escolher a mesma foto duas
+vezes seguidas continue disparando o processamento.
 
 ## Publicação
 

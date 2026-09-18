@@ -46,8 +46,14 @@ input.big{width:5.2em;padding:0 4px;border:1px dashed var(--bd);border-radius:6p
 input.big:focus{border-style:solid;border-color:var(--vd);outline:none}
 .leg{font-size:.75rem;color:var(--cz);margin-top:6px;line-height:1.5}
 .leg b{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px}
-dialog{width:min(560px,calc(100% - 28px));border:0;border-radius:14px;padding:0;box-shadow:0 18px 60px rgba(0,0,0,.28)}
-dialog::backdrop{background:rgba(17,24,39,.62)}
+.overlay{position:fixed;inset:0;background:rgba(17,24,39,.62);z-index:90;
+  display:flex;align-items:center;justify-content:center;padding:14px}
+.overlay .caixa{width:min(560px,100%);max-height:88vh;overflow:auto;background:#fff;
+  border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.28)}
+/* precisa vir DEPOIS de .overlay: como .hide é declarada antes, sozinha ela
+   perde para o display:flex e o overlay cobriria a tela o tempo todo,
+   engolindo todos os cliques da página. */
+.overlay.hide{display:none!important}
 .guide-head{background:var(--az);color:#fff;padding:14px 16px;font-weight:700}
 .guide-body{padding:16px;line-height:1.45}
 .guide-body ol{margin:0;padding-left:22px}.guide-body li{margin:0 0 8px}
@@ -60,7 +66,7 @@ dialog::backdrop{background:rgba(17,24,39,.62)}
 
 <header class="noprint">
   <div><h3>Urologger</h3><small>Leitura conservadora do nível pela escala impressa</small></div>
-  <span class="badge">v7.4 — metadados da foto + entrada manual</span>
+  <span class="badge" id="selo">v7.6 — carregando…</span>
 </header>
 
 <div class="row noprint">
@@ -90,10 +96,10 @@ dialog::backdrop{background:rgba(17,24,39,.62)}
       <input type="file" id="fCam" accept="image/*" capture="environment" class="hide">
       <input type="file" id="fGal" accept="image/*" class="hide">
       <div class="grid2" style="margin-bottom:12px">
-        <button class="b1" onclick="pick('cam')">Fotografar</button>
-        <button class="b2" onclick="pick('gal')">Escolher arquivo</button>
+        <button class="b1" id="btFoto" type="button">Fotografar</button>
+        <button class="b2" id="btArquivo" type="button">Escolher arquivo</button>
       </div>
-      <button class="b4" style="width:100%;margin-bottom:12px" onclick="medidaManual()">Registrar sem foto</button>
+      <button class="b4" style="width:100%;margin-bottom:12px" id="btSemFoto" type="button">Registrar sem foto</button>
       <div class="chk" style="margin-bottom:10px">
         <input type="checkbox" id="useOcr" checked>
         <label for="useOcr" style="margin:0">Confirmar os números da escala por OCR (mais lento)</label>
@@ -110,24 +116,85 @@ dialog::backdrop{background:rgba(17,24,39,.62)}
   </div>
 </div>
 
-<dialog id="guideModal" aria-labelledby="guideTitle">
-  <div class="guide-head" id="guideTitle">Instruções para aquisição da imagem</div>
-  <div class="guide-body">
-    <ol>
-      <li>Use o auxílio do nível/acelerômetro da câmera e mantenha a câmera perpendicular ao coletor.</li>
-      <li>Mantenha o local bem iluminado.</li>
-      <li>Não use flash.</li>
-      <li>Segure firmemente a câmera no momento da aquisição.</li>
-      <li>O coletor deve estar pendurado e nivelado.</li>
-      <li>Não deve haver nenhum artefato na frente do coletor.</li>
-      <li>Enquadre apenas o coletor e alinhe seus bordos aos bordos do campo visual da câmera.</li>
-    </ol>
+<div id="guideModal" class="overlay hide" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+  <div class="caixa">
+    <div class="guide-head" id="guideTitle">Instruções para aquisição da imagem</div>
+    <div class="guide-body">
+      <ol>
+        <li>Use o auxílio do nível/acelerômetro da câmera e mantenha a câmera perpendicular ao coletor.</li>
+        <li>Mantenha o local bem iluminado.</li>
+        <li>Não use flash.</li>
+        <li>Segure firmemente a câmera no momento da aquisição.</li>
+        <li>O coletor deve estar pendurado e nivelado.</li>
+        <li>Não deve haver nenhum artefato na frente do coletor.</li>
+        <li>Enquadre apenas o coletor e alinhe seus bordos aos bordos do campo visual da câmera.</li>
+      </ol>
+    </div>
+    <div class="guide-actions">
+      <button class="b4" type="button" id="btGuiaCancel">Cancelar</button>
+      <button class="b1" type="button" id="btGuiaOk">Entendi, prosseguir</button>
+    </div>
   </div>
-  <div class="guide-actions">
-    <button class="b4" type="button" onclick="closeGuide()">Cancelar</button>
-    <button class="b1" type="button" onclick="proceedToCapture()">Entendi, prosseguir</button>
+</div>
+
+
+<div id="manualModal" class="overlay hide" role="dialog" aria-modal="true" aria-labelledby="manualTitle">
+  <div class="caixa">
+    <div class="guide-head" id="manualTitle">Registro manual do volume</div>
+    <div class="guide-body">
+      <div class="alert a-warn" id="mMotivo">—</div>
+
+      <label for="mWhen">Data e hora da aquisição da foto</label>
+      <input type="datetime-local" id="mWhen">
+      <div class="mut" id="mOrigem" style="margin-top:3px">—</div>
+
+      <label for="mVol">Volume lido no coletor (mL)</label>
+      <input type="number" id="mVol" inputmode="numeric" step="any" placeholder="ex.: 1500">
+      <div class="mut" id="mMax" style="margin-top:3px">—</div>
+
+      <label for="mCor">Coloração</label>
+      <select id="mCor">
+        <option value="">Manter a estimada pela foto</option>
+        <option value="Incolor / muito diluída|#f2f2e8">Incolor / muito diluída</option>
+        <option value="Amarelo claro / citrino|#f2e07a">Amarelo claro / citrino</option>
+        <option value="Âmbar / amarelo escuro|#d79a24">Âmbar / amarelo escuro</option>
+        <option value="Avermelhado — verificar hematúria|#b5453a">Avermelhado — verificar hematúria</option>
+        <option value="Escuro / concentrado|#6b5320">Escuro / concentrado</option>
+        <option value="Castanho — verificar colúria|#7a4a22">Castanho — verificar colúria</option>
+      </select>
+
+      <label for="mOdor">Odor</label>
+      <select id="mOdor">
+        <option>Sui generis (sem alteração)</option>
+        <option>Fétido / intenso</option>
+        <option>Adocicado / frutado</option>
+      </select>
+
+      <label>Sinais e sintomas</label>
+      <div class="grid4">
+        <div class="chk"><input type="checkbox" id="m1"><label for="m1" style="margin:0">Dor / disúria</label></div>
+        <div class="chk"><input type="checkbox" id="m2"><label for="m2" style="margin:0">Urgência</label></div>
+        <div class="chk"><input type="checkbox" id="m3"><label for="m3" style="margin:0">Dor lombar</label></div>
+        <div class="chk"><input type="checkbox" id="m4"><label for="m4" style="margin:0">Sede intensa</label></div>
+      </div>
+
+      <label for="mEmpty">Houve esvaziamento do coletor após esta foto?</label>
+      <select id="mEmpty">
+        <option value="1">Sim — coletor esvaziado</option>
+        <option value="0">Não — coletor mantido</option>
+      </select>
+
+      <details style="margin-top:12px">
+        <summary class="mut" style="cursor:pointer">Por que a leitura automática não saiu</summary>
+        <div class="mut" id="mDiag" style="margin-top:6px;line-height:1.5"></div>
+      </details>
+    </div>
+    <div class="guide-actions">
+      <button class="b4" type="button" id="btManualCancel">Cancelar</button>
+      <button class="b3" type="button" id="btManualSalvar">Salvar registro</button>
+    </div>
   </div>
-</dialog>
+</div>
 
 <div class="card noprint hide" id="secResult">
   <h6>4. Conferência da leitura</h6>
@@ -182,7 +249,7 @@ dialog::backdrop{background:rgba(17,24,39,.62)}
         <option value="1">Sim — coletor esvaziado</option>
         <option value="0">Não — coletor mantido</option>
       </select>
-      <button class="b3" style="width:100%;margin-top:14px" onclick="saveRecord()">Salvar registro</button>
+      <button class="b3" style="width:100%;margin-top:14px" id="btSalvar" type="button">Salvar registro</button>
     </div>
   </div>
 </div>
@@ -191,9 +258,9 @@ dialog::backdrop{background:rgba(17,24,39,.62)}
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <h6 style="margin:0">Histórico</h6>
     <div class="noprint">
-      <button class="b4" onclick="exportCSV()">CSV</button>
-      <button class="b4" onclick="window.print()">Relatório</button>
-      <button class="b5" onclick="clearAll()">Limpar</button>
+      <button class="b4" id="btCsv" type="button">CSV</button>
+      <button class="b4" id="btRel" type="button">Relatório</button>
+      <button class="b5" id="btLimpar" type="button">Limpar</button>
     </div>
   </div>
   <div style="overflow-x:auto;margin-top:12px">
@@ -240,6 +307,20 @@ Os dados ficam apenas neste dispositivo — limpar o cache do navegador apaga o 
      baixa — apenas bordas do coletor + menisco (regra de 3)
    ========================================================================== */
 
+/* Guarda de erro: qualquer falha aparece na tela em vez de morrer calada.
+   Um botão que não responde não diz nada; uma caixa vermelha diz tudo. */
+window.addEventListener('error', ev => {
+  const alvo = document.getElementById('msg');
+  if(!alvo) return;
+  alvo.innerHTML = '<div class="alert a-err"><b>Erro no aplicativo:</b> '+
+    String(ev.message||'desconhecido')+' (linha '+(ev.lineno||'?')+')</div>';
+});
+window.addEventListener('unhandledrejection', ev => {
+  const alvo = document.getElementById('msg');
+  if(alvo) alvo.innerHTML = '<div class="alert a-err"><b>Erro no aplicativo:</b> '+
+    String((ev.reason && ev.reason.message) || ev.reason || 'desconhecido')+'</div>';
+});
+
 const V = document.getElementById('visor'), VX = V.getContext('2d');
 let img=null, state=null, records=[];
 
@@ -251,27 +332,42 @@ const median = a => { const s=[...a].sort((x,y)=>x-y); const n=s.length;
 const medianGap = T => { const d=[]; for(let i=1;i<T.length;i++) d.push(T[i].y-T[i-1].y); return median(d)||1; };
 
 let captureTarget=null;
-function pick(w){
-  captureTarget=w;
+
+/* A tela de instruções é um overlay comum. A versão anterior usava <dialog>
+   e showModal(), que depende do navegador; se ele não abrisse, o botão
+   ficava mudo e a captura não acontecia. Agora, se o overlay falhar por
+   qualquer motivo, a captura acontece assim mesmo. */
+function abreGuia(){
   const d=$('guideModal');
-  if(typeof d.showModal==='function') d.showModal();
-  else d.setAttribute('open','');
+  if(!d) return false;
+  d.classList.remove('hide');
+  return true;
 }
 function closeGuide(){
   const d=$('guideModal');
-  if(typeof d.close==='function') d.close(); else d.removeAttribute('open');
+  if(d) d.classList.add('hide');
   captureTarget=null;
+}
+function disparaEntrada(alvo){
+  const inp=$(alvo==='cam'?'fCam':'fGal');
+  if(!inp){ msg('Campo de captura não encontrado nesta página.','err'); return; }
+  inp.value='';          /* permite reenviar a mesma foto */
+  inp.click();
+}
+function pick(w){
+  captureTarget=w;
+  try{
+    if(!abreGuia()) disparaEntrada(w);     /* plano B: vai direto à captura */
+  }catch(e){
+    console.warn('guia:',e);
+    disparaEntrada(w);
+  }
 }
 function proceedToCapture(){
-  const target=captureTarget;
-  const d=$('guideModal');
-  if(typeof d.close==='function') d.close(); else d.removeAttribute('open');
-  captureTarget=null;
-  if(target) $(target==='cam'?'fCam':'fGal').click();
+  const alvo=captureTarget;
+  closeGuide();
+  if(alvo) disparaEntrada(alvo);
 }
-$('fCam').onchange = e => onFile(e.target.files[0]);
-$('fGal').onchange = e => onFile(e.target.files[0]);
-$('guideModal').addEventListener('cancel',()=>{ captureTarget=null; });
 
 for(const id of ['cModel','cMax','cStep']){
   $(id).addEventListener('change',()=>{
@@ -421,12 +517,20 @@ async function analyze(meta){
     ? `Traços da escala: ${ticks.length} detectados, passo de ${medianGap(ticks).toFixed(1)} px, inclinação ${angle.toFixed(1)}°.`
     : `Traços da escala: ${ticks.length} detectados — insuficiente (mínimo 4).`);
 
-  if(ticks.length>=4 && Math.abs(angle)>3){
-    modoManual(meta,`Escala inclinada ${Math.abs(angle).toFixed(1)}°; o limite é 3°.`,
+  /* Inclinação: a linha do nível é traçada COM a inclinação medida, isto é,
+     o cálculo já compensa o ângulo. Reprovar a 3° descartava foto boa de
+     bolsa pendurada, que raramente fica perfeitamente nivelada. Até 8° a
+     leitura prossegue e o ângulo é registrado; acima disso a projeção perde
+     confiabilidade e vai para o registro manual. */
+  let avisoAngulo='';
+  if(ticks.length>=4 && Math.abs(angle)>8){
+    modoManual(meta,`Escala inclinada ${Math.abs(angle).toFixed(1)}°; acima de 8° a projeção do nível deixa de ser confiável.`,
       diag.concat(['Mantenha a câmera perpendicular ao coletor, com o nível da câmera ligado.']),
       {w,h,config,px,collector,ticks,slope});
     return;
   }
+  if(ticks.length>=4 && Math.abs(angle)>3)
+    avisoAngulo=`Escala inclinada ${Math.abs(angle).toFixed(1)}° (acima dos 3° ideais; a leitura compensa o ângulo, mas confira o valor). `;
 
   const scale = ticks.length>=4 ? locateScale(ticks,collector,w,h)
                                 : {tickX0:collector.x0,tickX1:collector.x0+Math.round(.18*collector.bw),
@@ -465,7 +569,7 @@ async function analyze(meta){
       {w,h,config,px,collector,ticks,slope,scale});
     return;
   }
-  diag.push(`Nível hidroaéreo: confirmado em ${men.inliers.length} de 3 faixas.`);
+  diag.push(`Nível hidroaéreo: confirmado em ${men.inliers.length} de ${men.nFaixas} faixas.`);
 
   const yLevel = men.yRef;
   const col = sampleColor(px,w,h,xr,yLevel,slope);
@@ -474,7 +578,28 @@ async function analyze(meta){
     .sort((a,b)=>a.y-b.y);
 
   state = {when,meta,w,h,ticks,slope,xr,men,yLevel,col,collector,scale,
-           calibration,config,confirmedNumbers,ocrNota,diag,manual:false};
+           calibration,config,confirmedNumbers,
+           ocrNota:avisoAngulo+ocrNota, diag, manual:false,
+           limiteConfianca: avisoAngulo ? 'média' : null};
+
+  /* Leitura automática só vale com concordância independente. Sem ela, a
+     tela de conferência daria um número de aparência confiável que ninguém
+     verificou — pior que não dar número nenhum, porque subestimar diurese
+     esconde oligúria. Nesse caso abre o registro manual, com as estimativas
+     à vista como referência. */
+  const leitura=readVolume(state);
+  if(leitura.semLeitura){
+    state.manual=true;
+    state.nivel='manual';
+    state.motivo=leitura.motivo;
+    state.sugestoes=leitura.sugestoes;
+    diag.push('Estimativas: '+leitura.sugestoes.map(x=>`${x.v} mL (${x.fonte})`).join('; '));
+    try{ draw(); }catch(e){ console.warn('visor:',e); }
+    $('secResult').classList.add('hide');
+    abreManual();
+    return;
+  }
+  state.leitura=leitura;
   recompute();
 }
 
@@ -489,7 +614,8 @@ async function analyze(meta){
 function modoManual(meta,motivo,diag,ctx){
   const when=(meta&&meta.when)||new Date();
   ctx = ctx || {};
-  const config = ctx.config || (collectorConfig().ok ? collectorConfig() : {max:2000,step:100,model:''});
+  const cfgOk=collectorConfig();
+  const config = ctx.config || (cfgOk.ok ? cfgOk : {max:2000,step:100,model:''});
   let col = {name:'não avaliada', hex:'#cccccc'};
   if(ctx.px && ctx.w && ctx.h) col = corAproximada(ctx.px,ctx.w,ctx.h,ctx.collector);
 
@@ -498,8 +624,79 @@ function modoManual(meta,motivo,diag,ctx){
            xr:ctx.collector?ctx.collector.x0+Math.round(.35*ctx.collector.bw):0,
            men:null, yLevel:null, col, collector:ctx.collector||null,
            scale:ctx.scale||null, calibration:{ok:false,points:[]},
-           config, confirmedNumbers:[], ocrNota:'', diag:diag||[], manual:true, motivo};
-  recompute();
+           config, confirmedNumbers:[], ocrNota:'', diag:diag||[], manual:true,
+           nivel:'manual', motivo};
+
+  /* a foto continua desenhada no visor, com o que deu para detectar */
+  try{ draw(); }catch(e){ console.warn('visor:',e); }
+  $('secResult').classList.add('hide');
+  abreManual();
+}
+
+/* ---------- caixa de diálogo do registro manual ----------
+   Abre sozinha sempre que a leitura automática não sai. A data e a hora vêm
+   dos metadados da própria foto e já chegam preenchidas; a coloração é
+   estimada da imagem; o volume é o único campo que depende de você. */
+function abreManual(){
+  if(!state) return;
+  const meta=state.meta||{};
+  $('mMotivo').innerHTML='<b>A leitura automática não saiu.</b> '+(state.motivo||'')+
+    ' Os dados da foto foram aproveitados — informe apenas o volume.';
+  $('mWhen').value=paraInput(state.when);
+  $('mOrigem').textContent='Origem da data/hora: '+(meta.origem||'horário atual')+
+    (meta.aparelho?' · '+meta.aparelho:'');
+  $('mVol').value='';
+  const sug=(state.sugestoes&&state.sugestoes.length)
+    ? 'Estimativas do processamento, apenas como referência — nenhuma foi confirmada: '+
+      state.sugestoes.map(x=>`<b>${x.v} mL</b> (${x.fonte})`).join(' · ')+'. '
+    : '';
+  $('mMax').innerHTML=sug+`Coloração estimada pela foto: ${state.col.name}.`+
+    ((state.config&&state.config.max)?` Máximo do coletor: ${state.config.max} mL.`:'');
+  $('mCor').value=''; $('mOdor').selectedIndex=0; $('mEmpty').value='1';
+  ['m1','m2','m3','m4'].forEach(i=>$(i).checked=false);
+  $('mDiag').innerHTML=(state.diag&&state.diag.length)
+    ? state.diag.map(d=>'• '+d).join('<br>') : 'Sem detalhes registrados.';
+  $('manualModal').classList.remove('hide');
+  setTimeout(()=>{ try{ $('mVol').focus(); }catch(e){} },80);
+  msg('A leitura automática não saiu nesta foto. Informe o volume na caixa aberta.','warn');
+}
+
+function fechaManual(){ $('manualModal').classList.add('hide'); }
+
+function salvarManual(){
+  if(!state) return;
+  const bruto=String($('mVol').value).trim().replace(',','.');
+  const vol=Math.round(Number(bruto));
+  if(bruto==='' || !Number.isFinite(vol) || vol<0){
+    msg('Informe o volume em mL para salvar o registro.','err');
+    $('mVol').focus(); return;
+  }
+  const quando=$('mWhen').value ? new Date($('mWhen').value) : state.when;
+  if(isNaN(quando.getTime())){ msg('Data/hora inválida.','err'); $('mWhen').focus(); return; }
+
+  let cor=state.col;
+  if($('mCor').value){ const [name,hex]=$('mCor').value.split('|'); cor={name,hex}; }
+
+  const sy=[];
+  if($('m1').checked) sy.push('Disúria');
+  if($('m2').checked) sy.push('Urgência');
+  if($('m3').checked) sy.push('Dor lombar');
+  if($('m4').checked) sy.push('Sede intensa');
+  sy.push($('mOdor').value);
+
+  const meta=state.meta||{};
+  const editada=Math.abs(quando.getTime()-state.when.getTime())>60000;
+  records.push({t:quando.getTime(),
+                vol: state.config.max ? Math.min(state.config.max,vol) : vol,
+                colorName:cor.name, colorHex:cor.hex, sy:sy.join(', '),
+                emptied: $('mEmpty').value==='1', nivel:'manual',
+                origemData: editada ? 'informada na conferência' : (meta.origem||'horário atual'),
+                aparelho: meta.aparelho||''});
+  records.sort((a,b)=>a.t-b.t);
+  persist(); render();
+  fechaManual();
+  state=null;
+  msg('Registro manual salvo.','ok');
 }
 
 /* cor média do terço inferior do coletor — estimativa para o modo manual */
@@ -956,30 +1153,46 @@ function validateOcrScale(candidates,ticks,config){
 
 /* --- menisco: consenso da transição claro -> escuro em três faixas --- */
 function meniscus(px,w,h,slope,collector,scale,xr){
-  let cleanX0=Math.max(scale.x1+Math.round(.02*collector.bw),
-                       collector.x0+Math.round(.30*collector.bw));
-  let cleanX1=collector.x1-Math.round(.04*collector.bw);
-  if(cleanX1-cleanX0 < .28*collector.bw){
-    cleanX0=collector.x0+Math.round(.35*collector.bw);
-    cleanX1=collector.x1-Math.round(.03*collector.bw);
+  /* A área de busca do nível NÃO pode sair da janela do OCR.
+     Essa janela é larga de propósito, para caber os números impressos; se ela
+     definir o início da área limpa, sobra só a tira da extrema direita do
+     coletor — justamente onde ficam marca, selo CE e pictogramas. Era isso que
+     reprovava foto boa de bolsa B|BRAUN: "nível não confirmado" numa imagem em
+     que o nível está perfeitamente visível, só que à esquerda da tira sobrada.
+     Aqui a área limpa começa logo depois dos traços; os números impressos não
+     atrapalham porque pixel() descarta tinta colorida. */
+  const fimTracos = (scale && scale.tickX1) ? scale.tickX1
+                                            : collector.x0+Math.round(.18*collector.bw);
+  let cleanX0 = Math.max(collector.x0+Math.round(.08*collector.bw),
+                Math.min(fimTracos+Math.round(.04*collector.bw),
+                         collector.x0+Math.round(.45*collector.bw)));
+  const cleanX1 = collector.x1-Math.round(.03*collector.bw);
+  const cleanW = cleanX1-cleanX0;
+  if(cleanW < .15*collector.bw) return null;
+
+  /* Seis faixas estreitas em vez de três largas: numa bolsa real quase sempre
+     há impressão, torneira ou etiqueta em alguma delas, e o consenso descarta
+     as sujas sem precisar adivinhar quais são. */
+  const nFaixas=6, bands=[];
+  for(let i=0;i<nFaixas;i++){
+    const a=i/nFaixas+.02, b=(i+1)/nFaixas-.02;
+    bands.push({x0:Math.round(cleanX0+a*cleanW), x1:Math.round(cleanX0+b*cleanW)});
   }
-  const cleanW=cleanX1-cleanX0;
-  if(cleanW<.18*collector.bw) return null;
-  const fractions=[[.02,.28],[.37,.63],[.72,.98]];
-  const bands=fractions.map(([a,b])=>({x0:Math.round(cleanX0+a*cleanW),
-                                       x1:Math.round(cleanX0+b*cleanW)}));
+
   const offsets=[5,9,13], candidates=[];
   const pixel=(x,y)=>{
     const i=((y*w+x)<<2),r=px[i],g=px[i+1],b=px[i+2];
     const sat=Math.max(r,g,b)-Math.min(r,g,b);
-    if(g>r+8&&g>=b-30&&sat>12) return null;
+    if(g>r+8&&g>=b-30&&sat>12) return null;      // tinta verde-azulada impressa
     return {lum:r*.299+g*.587+b*.114, yellow:(r+g)/2-b};
   };
 
   for(const band of bands){
+    const largura=band.x1-band.x0;
+    if(largura<12) continue;
     const scoreAt=(yRef,distances)=>{
       const aL=[],bL=[],aY=[],bY=[];
-      for(let x=band.x0;x<band.x1;x+=3){
+      for(let x=band.x0;x<band.x1;x+=2){
         const line=yRef+slope*(x-xr);
         for(const d of distances){
           const ya=Math.round(line-d), yb=Math.round(line+d);
@@ -989,10 +1202,10 @@ function meniscus(px,w,h,slope,collector,scale,xr){
           aL.push(a.lum);bL.push(b.lum);aY.push(a.yellow);bY.push(b.yellow);
         }
       }
-      if(aL.length<Math.max(12,(band.x1-band.x0)/4)) return -Infinity;
+      if(aL.length < Math.max(10,largura/4)) return -Infinity;
       const darkening=(median(aL)-median(bL))/255;
       const yellowing=Math.max(0,(median(bY)-median(aY))/128);
-      return darkening+.30*yellowing;
+      return darkening+.45*yellowing;           // urina amarela sob bolsa clara
     };
     let best={y:null,score:-Infinity};
     for(let yRef=collector.y0+16;yRef<=collector.y1-16;yRef++){
@@ -1009,17 +1222,88 @@ function meniscus(px,w,h,slope,collector,scale,xr){
       }
       best=refined;
     }
-    if(best.y!==null&&best.score>.020) candidates.push({...band,...best});
+    if(best.y!==null && best.score>.012) candidates.push({...band,...best});
   }
   if(candidates.length<2) return null;
-  const center=median(candidates.map(c=>c.y));
+
+  /* Consenso por aglomerado, não por mediana.
+     Numa bolsa real as faixas sujas — torneira, etiqueta, borda inferior —
+     pontuam MAIS ALTO que a interface ar-líquido, e ficam espalhadas em
+     alturas diferentes. A mediana então cai no meio de valores que não
+     concordam entre si e nenhum candidato sobrevive à tolerância: era assim
+     que uma foto com o nível perfeitamente visível era reprovada.
+     O que identifica o nível não é a intensidade, é a CONCORDÂNCIA: um nível
+     de líquido é horizontal e aparece na mesma altura em várias faixas, ao
+     passo que cada artefato aparece só na sua. Vence o maior aglomerado;
+     empate se decide pela largura que ele cobre, e só então pela pontuação. */
   const tolerance=Math.max(8,.035*collector.bh);
-  const inliers=candidates.filter(c=>Math.abs(c.y-center)<=tolerance);
+  const larguraDe = g => Math.max(...g.map(o=>o.x1)) - Math.min(...g.map(o=>o.x0));
+  let melhor=null;
+  for(const c of candidates){
+    const grupo=candidates.filter(o=>Math.abs(o.y-c.y)<=tolerance);
+    if(!melhor) { melhor=grupo; continue; }
+    const a=[grupo.length, larguraDe(grupo), grupo.reduce((s,o)=>s+o.score,0)];
+    const b=[melhor.length, larguraDe(melhor), melhor.reduce((s,o)=>s+o.score,0)];
+    if(a[0]>b[0] || (a[0]===b[0]&&a[1]>b[1]) || (a[0]===b[0]&&a[1]===b[1]&&a[2]>b[2]))
+      melhor=grupo;
+  }
+  const inliers=melhor||[];
   if(inliers.length<2) return null;
   const weight=inliers.reduce((s,c)=>s+Math.max(.001,c.score),0);
   const yRef=inliers.reduce((s,c)=>s+c.y*Math.max(.001,c.score),0)/weight;
-  return {yRef:Math.round(yRef),x0:cleanX0,x1:cleanX1,candidates,inliers,
-          strength:median(inliers.map(c=>c.score))};
+  return {yRef:Math.round(yRef), x0:cleanX0, x1:cleanX1, candidates, inliers,
+          nFaixas:bands.length, strength:median(inliers.map(c=>c.score))};
+}
+
+/* ---------- calibração pela posição dos números impressos ----------
+   A escada de traços dá o passo, mas não dá a âncora absoluta, e ancorar no
+   "fundo do coletor" só vale quando o fundo do coletor é mesmo o fundo do
+   quadro. Numa bolsa fotografada com chão e banqueta embaixo, essa hipótese
+   quebra — e como a conferência pela altura total usa a MESMA caixa, ela
+   concorda com o erro em vez de denunciá-lo. Duas estimativas que
+   compartilham a mesma premissa falsa não são duas estimativas.
+   Os números lidos pelo OCR, com as posições em pixel onde foram lidos,
+   determinam sozinhos a reta volume(y). É a única âncora independente. */
+function calibrarPorNumeros(candidates){
+  const pts=[];
+  const vistos=new Set();
+  for(const c of [...candidates].sort((a,b)=>b.confidence-a.confidence)){
+    if(vistos.has(c.vol)) continue;
+    vistos.add(c.vol); pts.push({y:c.y, v:c.vol});
+  }
+  if(pts.length<2) return null;
+  pts.sort((a,b)=>a.y-b.y);
+
+  /* ajuste robusto: para cada par, conta quantos pontos caem na reta */
+  let melhor=null;
+  for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
+    const dy=pts[j].y-pts[i].y;
+    if(Math.abs(dy)<8) continue;
+    const b=(pts[j].v-pts[i].v)/dy;            // mL por pixel (negativo)
+    if(!(b<0)) continue;                        // volume tem de cair com y
+    const a=pts[i].v-b*pts[i].y;
+    const tol=Math.max(40, .06*Math.abs(a));
+    const dentro=pts.filter(p=>Math.abs((a+b*p.y)-p.v)<=tol);
+    const erro=dentro.reduce((s,p)=>s+Math.abs((a+b*p.y)-p.v),0);
+    if(!melhor || dentro.length>melhor.dentro.length ||
+       (dentro.length===melhor.dentro.length && erro<melhor.erro))
+      melhor={a,b,dentro,erro};
+  }
+  if(!melhor || melhor.dentro.length<2) return null;
+
+  /* mínimos quadrados sobre os pontos coerentes */
+  const n=melhor.dentro.length;
+  const my=melhor.dentro.reduce((s,p)=>s+p.y,0)/n;
+  const mv=melhor.dentro.reduce((s,p)=>s+p.v,0)/n;
+  let num=0,den=0;
+  for(const p of melhor.dentro){ num+=(p.y-my)*(p.v-mv); den+=(p.y-my)*(p.y-my); }
+  if(!den) return null;
+  const b=num/den, a=mv-b*my;
+  if(!(b<0)) return null;
+  const span=Math.max(...melhor.dentro.map(p=>p.y))-Math.min(...melhor.dentro.map(p=>p.y));
+  return {a,b,pontos:melhor.dentro,span,
+          volumeEm:y=>a+b*y,
+          mLporPixel:-b};
 }
 
 /* ---------- volume: três níveis de confiança ---------- */
@@ -1033,37 +1317,55 @@ function geometricVolume(collector,y,config){
 function readVolume(state){
   const {ticks,yLevel,calibration,config,collector}=state;
   const gap=ticks.length>=4 ? medianGap(ticks) : null;
+  const passo=config.step;
+  const arredonda=v=>Math.max(0,Math.min(config.max,
+                     Math.floor((v+passo*.015)/passo)*passo));
 
-  /* alta — escala ancorada pelos números lidos */
-  if(calibration.ok && ticks.length>=4){
-    const r=ladderVolume(ticks,yLevel,calibration.intercept,config,gap);
-    if(r) return {...r, nivel:'alta',
-      base:`escala confirmada por OCR (${calibration.points.length} números), `+
-           `${ticks.length} traços e menisco em ${state.men.inliers.length} de 3 faixas`};
-  }
+  /* (1) âncora independente: a reta ajustada nos números lidos */
+  const reta = calibration.ok ? calibrarPorNumeros(calibration.points) : null;
+  const vReta = reta ? reta.volumeEm(yLevel) : null;
 
-  /* média — o passo em pixels dos traços vale exatamente um intervalo em mL.
-     Falta só a âncora absoluta. O fundo do coletor é o zero: contar quantos
-     passos cabem entre o fundo e cada traço dá a escala inteira, com erro
-     muito menor do que a proporção de altura do corpo (que ignora as
-     margens sem graduação em cima e embaixo). */
+  /* (2) escada de traços ancorada no fundo do coletor */
+  let vEscada=null, detalheEscada=null;
   if(ticks.length>=4){
-    const geo=geometricVolume(collector,yLevel,config);
-    const intercept=config.step*Math.round((collector.y1-ticks[0].y)/gap);
+    const intercept=passo*Math.round((collector.y1-ticks[0].y)/gap);
     const r=ladderVolume(ticks,yLevel,intercept,config,gap);
-    /* confere contra a proporção de altura; discordância grande derruba o nível */
-    if(r && Math.abs(r.raw-geo) <= Math.max(2*config.step,.18*config.max))
-      return {...r, nivel:'média',
-        base:`${ticks.length} traços regulares (passo de ${gap.toFixed(1)} px = ${config.step} mL) `+
-             `ancorados no fundo do coletor, conferidos contra a altura total `+
-             `(${Math.round(geo)} mL); sem confirmação por OCR`};
+    if(r){ vEscada=r.raw; detalheEscada=r.detail; }
   }
 
-  /* baixa — só bordas do coletor e menisco */
-  const raw=geometricVolume(collector,yLevel,config);
-  return {volume:Math.max(0,Math.floor((raw+config.step*.015)/config.step)*config.step),
-          raw, detail:'proporção de altura do coletor', nivel:'baixa',
-          base:'nenhuma escala impressa foi detectada; leitura por proporção de altura'};
+  /* (3) proporção de altura — depende da mesma caixa que (2) */
+  const vGeo=geometricVolume(collector,yLevel,config);
+
+  /* ALTA exige que a reta dos números e a escada concordem dentro de um
+     intervalo da escala. Sem isso, não há leitura automática: a decisão
+     volta para quem está olhando o coletor. */
+  if(vReta!=null && vEscada!=null && Math.abs(vReta-vEscada)<=passo &&
+     reta.pontos.length>=2 && reta.span>=.10*collector.bh){
+    const r=ladderVolume(ticks,yLevel,
+      passo*Math.round((reta.volumeEm(ticks[0].y))/passo)+0, config, gap) ||
+      {volume:arredonda(vReta), raw:vReta, detail:'nível interpolado na escala'};
+    return {...r, volume:arredonda(Math.min(r.raw,vReta)), nivel:'alta',
+      base:`${reta.pontos.length} números lidos pelo OCR definem a escala `+
+           `(${reta.mLporPixel.toFixed(1)} mL por pixel) e a escada de `+
+           `${ticks.length} traços concorda dentro de ${passo} mL`};
+  }
+
+  /* Sem concordância: devolve as estimativas como SUGESTÃO, sem assumi-las. */
+  const sugestoes=[];
+  if(vReta!=null) sugestoes.push({fonte:'números lidos pelo OCR', v:arredonda(vReta)});
+  if(vEscada!=null) sugestoes.push({fonte:'escada de traços', v:arredonda(vEscada)});
+  sugestoes.push({fonte:'proporção de altura do coletor', v:arredonda(vGeo)});
+  let motivo;
+  if(vReta==null)
+    motivo='Os números impressos na escala não foram confirmados pelo OCR. '+
+           'Sem eles não existe âncora independente: a escada de traços e a proporção '+
+           'de altura partem da mesma caixa detectada, então concordarem entre si não prova nada.';
+  else if(vEscada==null)
+    motivo='Os traços da escala não formaram uma sequência regular para conferir a leitura do OCR.';
+  else
+    motivo=`As duas âncoras independentes discordam: ${arredonda(vReta)} mL pelos números `+
+           `lidos e ${arredonda(vEscada)} mL pela escada de traços.`;
+  return {semLeitura:true, sugestoes, motivo};
 }
 
 /* leitura conservadora sobre a escada de traços */
@@ -1093,42 +1395,26 @@ function ladderVolume(ticks,y,intercept,config,gap){
 }
 
 function recompute(){
-  if(!state) return;
+  if(!state || state.manual) return;
+  const reading=state.leitura||readVolume(state);
+  if(reading.semLeitura) return;
+  state.volume=reading.volume;
+  state.nivel=reading.nivel;
+  const cls={alta:'a-ok','média':'a-warn',baixa:'a-err'}[reading.nivel];
+  const rotulo={alta:'Confiança alta — tripla validação',
+                'média':'Confiança média — confira o valor',
+                baixa:'Confiança baixa — confira o valor'}[reading.nivel];
+  $('rOcr').className='alert '+cls;
+  $('rOcr').innerHTML=`<b>${rotulo}.</b> ${state.ocrNota||''}${reading.base}.`;
+  $('rVol').value=reading.volume;
+  $('rDetail').textContent=reading.detail+' · leitura conservadora pelo valor inferior da escala · '+
+    `${state.ticks.length} traços · inclinação ${(Math.atan(state.slope)*180/Math.PI).toFixed(1)}°`;
 
-  if(state.manual){
-    $('rOcr').className='alert a-warn';
-    const org=(state.meta&&state.meta.origem)||'';
-    const herdado=/EXIF|nome do arquivo|data do arquivo/.test(org);
-    $('rOcr').innerHTML='<b>Leitura manual.</b> '+state.motivo+
-      ' Digite abaixo o volume que você lê no coletor — o registro vale normalmente.'+
-      (herdado?' A data e a hora vieram dos metadados da própria foto; a coloração foi'+
-               ' estimada da imagem. Só o volume é seu.':'');
-    $('rVol').value='';
-    $('rVol').placeholder='digite';
-    $('rDetail').textContent='Valor informado por você · registrado exatamente como digitado'+
-      (state.config.max?` · máximo do coletor: ${state.config.max} mL`:'');
-    state.nivel='manual';
-  }else{
-    const reading=readVolume(state);
-    state.volume=reading.volume;
-    state.nivel=reading.nivel;
-    const cls={alta:'a-ok','média':'a-warn',baixa:'a-err'}[reading.nivel];
-    const rotulo={alta:'Confiança alta — tripla validação',
-                  'média':'Confiança média — confira o valor',
-                  baixa:'Confiança baixa — confira o valor'}[reading.nivel];
-    $('rOcr').className='alert '+cls;
-    $('rOcr').innerHTML=`<b>${rotulo}.</b> ${state.ocrNota||''}${reading.base}.`;
-    $('rVol').value=reading.volume;
-    $('rDetail').textContent=reading.detail+' · leitura conservadora pelo valor inferior da escala · '+
-      `${state.ticks.length} traços · inclinação ${(Math.atan(state.slope)*180/Math.PI).toFixed(1)}°`;
-  }
-
-  /* diagnóstico: sempre disponível, aberto quando a leitura falhou */
   const box=$('rDiagBox');
   if(state.diag && state.diag.length){
     $('rDiag').innerHTML=state.diag.map(d=>'• '+d).join('<br>');
     box.classList.remove('hide');
-    box.open = !!state.manual;
+    box.open=false;
   }else box.classList.add('hide');
 
   $('rWhen').value=paraInput(state.when);
@@ -1137,13 +1423,10 @@ function recompute(){
     (meta.aparelho?' · '+meta.aparelho:'');
   $('rColorSel').value='';
   $('rDot').style.background=state.col.hex;
-  $('rColor').textContent=state.col.name + (state.manual?' (estimada)':'');
+  $('rColor').textContent=state.col.name;
   draw();
   $('secResult').classList.remove('hide');
-  msg(state.manual
-      ? 'A leitura automática não saiu nesta foto. Informe o volume abaixo e salve normalmente.'
-      : 'Processamento concluído. Confira o volume antes de salvar.',
-      state.manual?'warn':'ok');
+  msg('Processamento concluído. Confira o volume antes de salvar.','ok');
   $('secResult').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
@@ -1353,6 +1636,34 @@ function clearAll(){
 function persist(){ try{ localStorage.setItem('urologger_v7', JSON.stringify(records)); }catch(e){} }
 function restore(){ try{ records = JSON.parse(localStorage.getItem('urologger_v7'))||[]; }catch(e){ records=[]; } }
 
+/* ---------- ligação dos controles ----------
+   Tudo num lugar só, no fim do arquivo. Se o arquivo chegar truncado ao
+   servidor, nada disto roda e o selo no topo não muda — o diagnóstico fica
+   visível em vez de virar "os botões não funcionam". */
+function ligar(id,evento,fn){
+  const el=$(id);
+  if(el) el.addEventListener(evento,fn);
+  else console.warn('controle ausente:',id);
+}
+
+ligar('btFoto','click',()=>pick('cam'));
+ligar('btArquivo','click',()=>pick('gal'));
+ligar('btSemFoto','click',medidaManual);
+ligar('btGuiaCancel','click',closeGuide);
+ligar('btGuiaOk','click',proceedToCapture);
+ligar('btSalvar','click',saveRecord);
+ligar('btCsv','click',exportCSV);
+ligar('btRel','click',()=>window.print());
+ligar('btLimpar','click',clearAll);
+ligar('fCam','change',e=>onFile(e.target.files[0]));
+ligar('fGal','change',e=>onFile(e.target.files[0]));
+ligar('guideModal','click',e=>{ if(e.target.id==='guideModal') closeGuide(); });
+ligar('btManualCancel','click',()=>{ fechaManual(); state=null; msg('Registro manual cancelado.','warn'); });
+ligar('btManualSalvar','click',salvarManual);
+ligar('manualModal','click',e=>{ if(e.target.id==='manualModal') fechaManual(); });
+ligar('mVol','keydown',e=>{ if(e.key==='Enter') salvarManual(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeGuide(); fechaManual(); } });
+
 /* ---------- PWA ---------- */
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
@@ -1361,6 +1672,14 @@ if('serviceWorker' in navigator){
 }
 
 restore(); render();
+
+/* Selo de integridade — a última instrução do arquivo.
+   Se o selo no alto da tela não mostrar "v7.4 ✓", o index.html que chegou
+   ao servidor está incompleto: foi cortado no envio. */
+(function(){
+  const el=$('selo');
+  if(el) el.textContent='v7.6 ✓ leitura só com dupla concordância';
+})();
 </script>
 </body>
 </html>
