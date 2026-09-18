@@ -5,7 +5,7 @@
    Chart.js e jsPDF, que o aplicativo não usa mais. Aqui cada arquivo é
    cacheado individualmente, e o essencial nunca depende do opcional. */
 
-const CACHE = 'urologger-v7.2';
+const CACHE = 'urologger-v7.4';
 
 /* Sem estes o aplicativo não abre. */
 const ESSENCIAIS = [

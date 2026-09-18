@@ -60,7 +60,7 @@ dialog::backdrop{background:rgba(17,24,39,.62)}
 
 <header class="noprint">
   <div><h3>Urologger</h3><small>Leitura conservadora do nível pela escala impressa</small></div>
-  <span class="badge">v7.2 — escala, contraste e OCR local</span>
+  <span class="badge">v7.4 — metadados da foto + entrada manual</span>
 </header>
 
 <div class="row noprint">
@@ -93,6 +93,7 @@ dialog::backdrop{background:rgba(17,24,39,.62)}
         <button class="b1" onclick="pick('cam')">Fotografar</button>
         <button class="b2" onclick="pick('gal')">Escolher arquivo</button>
       </div>
+      <button class="b4" style="width:100%;margin-bottom:12px" onclick="medidaManual()">Registrar sem foto</button>
       <div class="chk" style="margin-bottom:10px">
         <input type="checkbox" id="useOcr" checked>
         <label for="useOcr" style="margin:0">Confirmar os números da escala por OCR (mais lento)</label>
@@ -132,7 +133,11 @@ dialog::backdrop{background:rgba(17,24,39,.62)}
   <h6>4. Conferência da leitura</h6>
   <div class="row">
     <div class="col">
-      <div class="alert a-ok" id="rOcr">Aguardando a validação da escala por OCR.</div>
+      <div class="alert a-ok" id="rOcr">Aguardando a leitura.</div>
+      <details id="rDiagBox" class="hide" style="margin:8px 0">
+        <summary class="mut" style="cursor:pointer">Por que a leitura automática não saiu</summary>
+        <div class="mut" id="rDiag" style="margin-top:6px;line-height:1.5"></div>
+      </details>
       <p class="mut" style="margin:8px 0 0">A leitura usa apenas valores previstos na escala e escolhe sempre o valor inferior. O campo abaixo é editável: o valor salvo é o que você confirmar.</p>
       <div style="margin-top:14px">
         <span class="mut">Volume no coletor</span>
@@ -140,12 +145,22 @@ dialog::backdrop{background:rgba(17,24,39,.62)}
         <div class="mut" id="rDetail">—</div>
       </div>
       <div style="margin-top:10px">
-        <span class="mut">Data/hora da imagem</span>
-        <div id="rTime" style="font-weight:600;font-size:.9rem">—</div>
+        <span class="mut">Data/hora da medida</span>
+        <input type="datetime-local" id="rWhen" style="font-weight:600;font-size:.9rem">
+        <div class="mut" id="rOrigem" style="margin-top:3px">—</div>
       </div>
       <div style="margin-top:10px">
         <span class="mut">Coloração</span>
         <div><span class="dot" id="rDot"></span> <span id="rColor" style="font-weight:600">—</span></div>
+        <select id="rColorSel" style="margin-top:6px">
+          <option value="">Manter a coloração detectada</option>
+          <option value="Incolor / muito diluída|#f2f2e8">Incolor / muito diluída</option>
+          <option value="Amarelo claro / citrino|#f2e07a">Amarelo claro / citrino</option>
+          <option value="Âmbar / amarelo escuro|#d79a24">Âmbar / amarelo escuro</option>
+          <option value="Avermelhado — verificar hematúria|#b5453a">Avermelhado — verificar hematúria</option>
+          <option value="Escuro / concentrado|#6b5320">Escuro / concentrado</option>
+          <option value="Castanho — verificar colúria|#7a4a22">Castanho — verificar colúria</option>
+        </select>
       </div>
     </div>
     <div class="col">
@@ -266,63 +281,96 @@ for(const id of ['cModel','cMax','cStep']){
   });
 }
 
-/* ---------- data/hora: EXIF próprio, sem biblioteca ---------- */
-function exifDate(buf){
+/* ---------- data/hora vinda dos metadados da foto ----------
+   A foto rejeitada continua valendo como documento: o que ela carrega de
+   metadado é aproveitado, e só o volume é digitado. A ordem de preferência
+   é DateTimeOriginal do EXIF, depois o padrão AAAAMMDD_HHMM no nome do
+   arquivo, depois a data do arquivo. A origem fica declarada na tela para
+   que um horário herdado de uma cópia não passe por horário de captura. */
+const paraInput = d => new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,16);
+
+function exifData(buf){
   try{
-    const d = new DataView(buf);
-    if(d.getUint16(0)!==0xFFD8) return null;
+    const d=new DataView(buf);
+    if(d.getUint16(0)!==0xFFD8) return null;          // só JPEG tem APP1/EXIF
     let off=2;
     while(off < d.byteLength-4){
       if(d.getUint8(off)!==0xFF) break;
       const mk=d.getUint8(off+1), len=d.getUint16(off+2);
       if(mk===0xE1 && d.getUint32(off+4)===0x45786966){
         const t=off+10, le=d.getUint16(t)===0x4949;
-        const g16=(p)=>d.getUint16(p,le), g32=(p)=>d.getUint32(p,le);
-        const readIFD=(p)=>{
-          const n=g16(p); let sub=null, dt=null;
+        const g16=p=>d.getUint16(p,le), g32=p=>d.getUint32(p,le);
+        const texto=(val,n)=>{ let s=''; for(let k=0;k<n;k++){
+          const c=d.getUint8(t+val+k); if(!c) break; s+=String.fromCharCode(c);} return s.trim(); };
+        const achado={dt:null,dtOriginal:null,make:null,model:null};
+        const lerIFD=p=>{
+          const n=g16(p); let sub=null;
           for(let i=0;i<n;i++){
-            const e=p+2+i*12, tag=g16(e), val=g32(e+8);
+            const e=p+2+i*12, tag=g16(e), cnt=g32(e+4), val=g32(e+8);
             if(tag===0x8769) sub=t+val;
-            if(tag===0x9003||tag===0x0132){
-              let s='';
-              for(let k=0;k<19;k++) s+=String.fromCharCode(d.getUint8(t+val+k));
-              dt=s;
-            }
+            else if(tag===0x9003) achado.dtOriginal=texto(val,19);
+            else if(tag===0x0132) achado.dt=texto(val,19);
+            else if(tag===0x010F) achado.make=texto(val,Math.min(cnt,40));
+            else if(tag===0x0110) achado.model=texto(val,Math.min(cnt,40));
           }
-          return {sub,dt};
+          return sub;
         };
-        let r=readIFD(t+g32(t+4)), s=r.dt;
-        if(r.sub){ const r2=readIFD(r.sub); if(r2.dt) s=r2.dt; }
+        const sub=lerIFD(t+g32(t+4));
+        if(sub) lerIFD(sub);
+        const s=achado.dtOriginal||achado.dt;
+        let quando=null;
         if(s){
-          const m=s.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
-          if(m) return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]);
+          const m=s.match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+          if(m) quando=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]);
         }
+        return {quando, original:!!achado.dtOriginal,
+                aparelho:[achado.make,achado.model].filter(Boolean).join(' ').trim()||null};
       }
       if(mk===0xDA) break;
       off += 2+len;
     }
-  }catch(e){}
+  }catch(e){ console.warn('EXIF:',e); }
   return null;
 }
-function nameDate(n){
-  const m=n.match(/(\d{4})(\d{2})(\d{2})[_\-]?(\d{2})(\d{2})/);
-  return m ? new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]) : null;
+
+function nomeData(n){
+  const m=String(n||'').match(/(20\d{2})[-_]?(\d{2})[-_]?(\d{2})[-_ ]?(\d{2})[-:]?(\d{2})/);
+  if(!m) return null;
+  const d=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]);
+  return isNaN(d.getTime())?null:d;
+}
+
+const valida = d => d && !isNaN(d.getTime()) && d.getFullYear()>2000 && d<=new Date(Date.now()+864e5);
+
+async function lerMetadados(f){
+  let exif=null;
+  try{ exif = exifData(await f.arrayBuffer()); }catch(e){ console.warn('metadados:',e); }
+  if(exif && valida(exif.quando))
+    return {when:exif.quando, aparelho:exif.aparelho,
+            origem:exif.original?'EXIF da foto (DateTimeOriginal)':'EXIF da foto'};
+  const pelo=nomeData(f.name);
+  if(valida(pelo))
+    return {when:pelo, aparelho:exif&&exif.aparelho||null, origem:'nome do arquivo'};
+  const arq=new Date(f.lastModified||Date.now());
+  if(valida(arq))
+    return {when:arq, aparelho:exif&&exif.aparelho||null,
+            origem:'data do arquivo (a foto não trazia EXIF)'};
+  return {when:new Date(), aparelho:null, origem:'horário atual (sem metadado utilizável)'};
 }
 
 async function onFile(f){
   if(!f) return;
   msg('Processando…','warn');
-  const buf = await f.arrayBuffer();
-  const when = exifDate(buf) || nameDate(f.name) || new Date(f.lastModified||Date.now());
-  const url = URL.createObjectURL(new Blob([buf]));
+  const meta = await lerMetadados(f);
+  const url = URL.createObjectURL(f);
   img = new Image();
   img.onload = async () => {
     URL.revokeObjectURL(url);
-    try{ await analyze(when); }
+    try{ await analyze(meta); }
     catch(err){
       console.error(err);
-      state=null; $('secResult').classList.add('hide');
-      msg('O processamento foi interrompido: '+(err.message||'erro não identificado')+'.','err');
+      modoManual(meta,'O processamento foi interrompido: '+(err.message||'erro não identificado')+'.',
+                 ['Erro interno — se ele se repetir, vale registrar o texto acima.']);
     }
   };
   img.src = url;
@@ -331,40 +379,52 @@ async function onFile(f){
 /* ---------- pipeline ---------- */
 const WORK = 900;
 
-async function analyze(when){
+async function analyze(meta){
+  const when=meta.when;
   const s = WORK/Math.max(img.width,img.height);
   const w = Math.round(img.width*s), h = Math.round(img.height*s);
   V.width=w; V.height=h;
   VX.drawImage(img,0,0,w,h);
   const px = VX.getImageData(0,0,w,h).data;
+  const diag=[];
 
   const config=collectorConfig();
   if(!config.ok){
-    state=null; $('secResult').classList.add('hide');
-    msg('Dados do coletor inválidos: '+config.why,'err'); return;
+    modoManual(meta,'Dados do coletor inválidos: '+config.why,
+               ['Corrija o cartão "2. Coletor" e processe a imagem de novo.'],{w,h});
+    return;
   }
 
-  /* Portão 1 — qualidade. Só reprova o que realmente impede a medida. */
+  /* Portão 1 — qualidade. */
   const q = quality(px,w,h);
-  if(!q.ok){ state=null; $('secResult').classList.add('hide');
-             msg('Foto rejeitada: '+q.why+' Refaça a captura.','err'); return; }
+  diag.push(`Nitidez (variância do laplaciano): ${(q.varL!==undefined?q.varL:0).toFixed(0)} — mínimo 12.`);
+  if(!q.ok){
+    modoManual(meta,'Leitura automática não realizada: '+q.why,diag,{w,h,config,px});
+    return;
+  }
 
   /* Portão 2 — bordas do coletor. */
   const collector=locateCollector(px,w,h);
   if(!collector.ok){
-    state=null; $('secResult').classList.add('hide');
-    msg('Não foi possível delimitar o coletor. '+collector.why,'err'); return;
+    diag.push('Bordas do coletor: '+collector.why);
+    modoManual(meta,'Não foi possível delimitar o coletor.',diag,{w,h,config,px});
+    return;
   }
+  diag.push(`Coletor delimitado: ${Math.round(100*collector.bw/w)}% da largura e `+
+            `${Math.round(100*collector.bh/h)}% da altura do quadro.`);
 
-  /* Traços da escala — a partir daqui nada mais é obrigatório. */
+  /* Traços da escala — opcionais. */
   const ticks = detectTicks(px,w,h,collector);
   const slope = ticks.length>=4 ? tickSlope(px,w,h,ticks,collector) : 0;
   const angle = Math.atan(slope)*180/Math.PI;
+  diag.push(ticks.length>=4
+    ? `Traços da escala: ${ticks.length} detectados, passo de ${medianGap(ticks).toFixed(1)} px, inclinação ${angle.toFixed(1)}°.`
+    : `Traços da escala: ${ticks.length} detectados — insuficiente (mínimo 4).`);
 
   if(ticks.length>=4 && Math.abs(angle)>3){
-    state=null; $('secResult').classList.add('hide');
-    msg(`Foto rejeitada: escala inclinada ${Math.abs(angle).toFixed(1)}°; o limite é 3°. `+
-        'Use o nível da câmera e mantenha-a perpendicular ao coletor.','err');
+    modoManual(meta,`Escala inclinada ${Math.abs(angle).toFixed(1)}°; o limite é 3°.`,
+      diag.concat(['Mantenha a câmera perpendicular ao coletor, com o nível da câmera ligado.']),
+      {w,h,config,px,collector,ticks,slope});
     return;
   }
 
@@ -375,33 +435,37 @@ async function analyze(when){
   const xr = ticks.length ? median(ticks.map(t => t.x0+t.bw))
                           : collector.x0+Math.round(.35*collector.bw);
 
-  /* OCR — confirmação opcional. Falha aqui não interrompe a leitura. */
+  /* OCR — confirmação opcional. */
   let calibration={ok:false,points:[]}, ocrNota='';
   if(ticks.length>=4 && $('useOcr').checked){
     try{
       msg('Coletor e escala localizados. Confirmando os números impressos por OCR…','warn');
       const ocr = await recognizeScale(px,w,h,scale,config);
       calibration = validateOcrScale(ocr.candidates,ticks,config);
-      if(!calibration.ok){
-        const found = ocr.candidates.length ? ocr.candidates.map(p=>p.vol).join(', ') : 'nenhum';
-        ocrNota = `OCR sem confirmação suficiente (números lidos: ${found}). `;
-      }
+      const found = ocr.candidates.length ? ocr.candidates.map(p=>p.vol).join(', ') : 'nenhum';
+      diag.push(`OCR: números lidos = ${found}; confirmados = ${calibration.points.length}.`);
+      if(!calibration.ok) ocrNota = `OCR sem confirmação suficiente (números lidos: ${found}). `;
     }catch(err){
       ocrNota = 'OCR indisponível ('+(err.message||'falha')+'). ';
+      diag.push('OCR: '+(err.message||'falha')+'.');
     }
   }else if(ticks.length>=4){
     ocrNota = 'OCR desligado nas opções. ';
+    diag.push('OCR: desligado nas opções.');
   }
 
-  /* Menisco — este sim é indispensável. */
+  /* Menisco. */
   msg('Localizando o nível hidroaéreo…','warn');
   const men = meniscus(px,w,h,slope,collector,scale,xr);
   if(!men){
-    state=null; $('secResult').classList.add('hide');
-    msg('O nível hidroaéreo não foi confirmado em pelo menos duas faixas de contraste. '+
-        'Refaça a foto sem reflexos sobre o coletor e com o líquido em repouso.','err');
+    diag.push('Nível hidroaéreo: nenhuma transição consistente em pelo menos duas das três faixas.');
+    modoManual(meta,'O nível hidroaéreo não foi confirmado.',
+      diag.concat(['Costuma ser reflexo sobre o coletor, líquido em movimento, '+
+                   'ou pouca diferença de contraste entre a urina e a parte vazia.']),
+      {w,h,config,px,collector,ticks,slope,scale});
     return;
   }
+  diag.push(`Nível hidroaéreo: confirmado em ${men.inliers.length} de 3 faixas.`);
 
   const yLevel = men.yRef;
   const col = sampleColor(px,w,h,xr,yLevel,slope);
@@ -409,9 +473,56 @@ async function analyze(when){
     .sort((a,b)=>Math.abs(a.y-yLevel)-Math.abs(b.y-yLevel)).slice(0,3)
     .sort((a,b)=>a.y-b.y);
 
-  state = {when,w,h,ticks,slope,xr,men,yLevel,col,collector,scale,
-           calibration,config,confirmedNumbers,ocrNota};
+  state = {when,meta,w,h,ticks,slope,xr,men,yLevel,col,collector,scale,
+           calibration,config,confirmedNumbers,ocrNota,diag,manual:false};
   recompute();
+}
+
+/* ======================================================================
+   MODO MANUAL — nenhuma foto é descartada.
+   Quando a leitura automática não sai, a tela de conferência abre assim
+   mesmo: o valor é digitado, e o registro vale como qualquer outro,
+   marcado com confiança "manual". A foto continua desenhada no visor com
+   o que foi possível detectar, e o diagnóstico fica visível para que a
+   causa da falha possa ser corrigida na próxima captura.
+   ====================================================================== */
+function modoManual(meta,motivo,diag,ctx){
+  const when=(meta&&meta.when)||new Date();
+  ctx = ctx || {};
+  const config = ctx.config || (collectorConfig().ok ? collectorConfig() : {max:2000,step:100,model:''});
+  let col = {name:'não avaliada', hex:'#cccccc'};
+  if(ctx.px && ctx.w && ctx.h) col = corAproximada(ctx.px,ctx.w,ctx.h,ctx.collector);
+
+  state = {when, meta, w:ctx.w||V.width, h:ctx.h||V.height,
+           ticks:ctx.ticks||[], slope:ctx.slope||0,
+           xr:ctx.collector?ctx.collector.x0+Math.round(.35*ctx.collector.bw):0,
+           men:null, yLevel:null, col, collector:ctx.collector||null,
+           scale:ctx.scale||null, calibration:{ok:false,points:[]},
+           config, confirmedNumbers:[], ocrNota:'', diag:diag||[], manual:true, motivo};
+  recompute();
+}
+
+/* cor média do terço inferior do coletor — estimativa para o modo manual */
+function corAproximada(px,w,h,collector){
+  const c = collector || {x0:Math.round(.2*w),x1:Math.round(.8*w),y0:0,y1:h,bw:Math.round(.6*w),bh:h};
+  const rs=[],gs=[],bs=[];
+  for(let y=Math.round(c.y0+.70*(c.y1-c.y0)); y<c.y1-3; y+=3)
+    for(let x=Math.round(c.x0+.35*c.bw); x<c.x0+.85*c.bw; x+=3){
+      if(x<0||y<0||x>=w||y>=h) continue;
+      const i=(y*w+x)<<2; rs.push(px[i]); gs.push(px[i+1]); bs.push(px[i+2]);
+    }
+  if(!rs.length) return {name:'não avaliada', hex:'#cccccc'};
+  const r=median(rs),g=median(gs),b=median(bs);
+  const hex='#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+  const sat=Math.max(r,g,b)-Math.min(r,g,b);
+  let name;
+  if(sat<28 && r>170) name='Incolor / muito diluída';
+  else if(r>190 && g>175 && b>110) name='Amarelo claro / citrino';
+  else if(r>150 && g>110 && b<110) name='Âmbar / amarelo escuro';
+  else if(r>120 && g<90 && b<90) name='Avermelhado — verificar hematúria';
+  else if(r<95 && g<95) name='Escuro / concentrado';
+  else name='Castanho — verificar colúria';
+  return {name, hex};
 }
 
 /* --- crivo de qualidade -------------------------------------------------
@@ -983,27 +1094,68 @@ function ladderVolume(ticks,y,intercept,config,gap){
 
 function recompute(){
   if(!state) return;
-  const reading=readVolume(state);
-  state.volume=reading.volume;
-  state.nivel=reading.nivel;
 
-  const cls={alta:'a-ok', 'média':'a-warn', baixa:'a-err'}[reading.nivel];
-  const rotulo={alta:'Confiança alta — tripla validação',
-                'média':'Confiança média — confira o valor',
-                baixa:'Confiança baixa — confira o valor'}[reading.nivel];
-  $('rOcr').className='alert '+cls;
-  $('rOcr').innerHTML=`<b>${rotulo}.</b> ${state.ocrNota||''}${reading.base}.`;
+  if(state.manual){
+    $('rOcr').className='alert a-warn';
+    const org=(state.meta&&state.meta.origem)||'';
+    const herdado=/EXIF|nome do arquivo|data do arquivo/.test(org);
+    $('rOcr').innerHTML='<b>Leitura manual.</b> '+state.motivo+
+      ' Digite abaixo o volume que você lê no coletor — o registro vale normalmente.'+
+      (herdado?' A data e a hora vieram dos metadados da própria foto; a coloração foi'+
+               ' estimada da imagem. Só o volume é seu.':'');
+    $('rVol').value='';
+    $('rVol').placeholder='digite';
+    $('rDetail').textContent='Valor informado por você · registrado exatamente como digitado'+
+      (state.config.max?` · máximo do coletor: ${state.config.max} mL`:'');
+    state.nivel='manual';
+  }else{
+    const reading=readVolume(state);
+    state.volume=reading.volume;
+    state.nivel=reading.nivel;
+    const cls={alta:'a-ok','média':'a-warn',baixa:'a-err'}[reading.nivel];
+    const rotulo={alta:'Confiança alta — tripla validação',
+                  'média':'Confiança média — confira o valor',
+                  baixa:'Confiança baixa — confira o valor'}[reading.nivel];
+    $('rOcr').className='alert '+cls;
+    $('rOcr').innerHTML=`<b>${rotulo}.</b> ${state.ocrNota||''}${reading.base}.`;
+    $('rVol').value=reading.volume;
+    $('rDetail').textContent=reading.detail+' · leitura conservadora pelo valor inferior da escala · '+
+      `${state.ticks.length} traços · inclinação ${(Math.atan(state.slope)*180/Math.PI).toFixed(1)}°`;
+  }
 
-  $('rVol').value=reading.volume;
-  $('rDetail').textContent=reading.detail+' · leitura conservadora pelo valor inferior da escala · '+
-    `${state.ticks.length} traços · inclinação ${(Math.atan(state.slope)*180/Math.PI).toFixed(1)}°`;
-  $('rTime').textContent=state.when.toLocaleString('pt-BR');
+  /* diagnóstico: sempre disponível, aberto quando a leitura falhou */
+  const box=$('rDiagBox');
+  if(state.diag && state.diag.length){
+    $('rDiag').innerHTML=state.diag.map(d=>'• '+d).join('<br>');
+    box.classList.remove('hide');
+    box.open = !!state.manual;
+  }else box.classList.add('hide');
+
+  $('rWhen').value=paraInput(state.when);
+  const meta=state.meta||{};
+  $('rOrigem').textContent='Origem: '+(meta.origem||'horário atual')+
+    (meta.aparelho?' · '+meta.aparelho:'');
+  $('rColorSel').value='';
   $('rDot').style.background=state.col.hex;
-  $('rColor').textContent=state.col.name;
+  $('rColor').textContent=state.col.name + (state.manual?' (estimada)':'');
   draw();
   $('secResult').classList.remove('hide');
-  msg('Processamento concluído. Confira o volume antes de salvar.','ok');
+  msg(state.manual
+      ? 'A leitura automática não saiu nesta foto. Informe o volume abaixo e salve normalmente.'
+      : 'Processamento concluído. Confira o volume antes de salvar.',
+      state.manual?'warn':'ok');
+  $('secResult').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
+
+/* a coloração escolhida na lista prevalece sobre a detectada */
+$('rColorSel').addEventListener('change',e=>{
+  if(!state) return;
+  if(!e.target.value){ draw(); return; }
+  const [name,hex]=e.target.value.split('|');
+  state.col={name,hex};
+  $('rDot').style.background=hex;
+  $('rColor').textContent=name+' (informada)';
+});
 
 /* ---------- cor da urina, amostrada abaixo do menisco ---------- */
 function sampleColor(px,w,h,xr,yLevel,slope){
@@ -1033,37 +1185,52 @@ function sampleColor(px,w,h,xr,yLevel,slope){
 
 /* ---------- desenho ---------- */
 function draw(){
-  const w=state.w,h=state.h;
-  VX.drawImage(img,0,0,w,h);
-  const c=state.collector,s=state.scale,T=state.ticks;
-  VX.strokeStyle='#198754';VX.lineWidth=3;
-  VX.strokeRect(c.x0,c.y0,c.bw,c.bh);
-  if(T.length){
+  const w=state.w||V.width, h=state.h||V.height;
+  if(img) VX.drawImage(img,0,0,w,h);
+  const c=state.collector, s=state.scale, T=state.ticks||[];
+  if(c){ VX.strokeStyle='#198754';VX.lineWidth=3; VX.strokeRect(c.x0,c.y0,c.bw,c.bh); }
+  if(T.length && s){
     VX.strokeStyle='#6f42c1';VX.lineWidth=2;
     VX.strokeRect(s.x0,s.y0,s.x1-s.x0,s.y1-s.y0);
     VX.lineWidth=3; VX.strokeStyle='#0d6efd';
     T.forEach(t=>{ VX.beginPath(); VX.moveTo(t.x0,t.y); VX.lineTo(t.x0+t.bw,t.y); VX.stroke(); });
   }
-  VX.fillStyle='#6f42c1';VX.font='bold 14px sans-serif';
-  state.calibration.points.forEach(p=>{
-    VX.beginPath();VX.arc(Math.max(s.x0+7,s.tickX0-8),p.y,5,0,Math.PI*2);VX.fill();
-    VX.fillText(String(p.vol),s.x0+4,Math.max(14,p.y-7));
-  });
+  if(s && state.calibration && state.calibration.points.length){
+    VX.fillStyle='#6f42c1';VX.font='bold 14px sans-serif';
+    state.calibration.points.forEach(p=>{
+      VX.beginPath();VX.arc(Math.max(s.x0+7,s.tickX0-8),p.y,5,0,Math.PI*2);VX.fill();
+      VX.fillText(String(p.vol),s.x0+4,Math.max(14,p.y-7));
+    });
+  }
   const m=state.men;
-  VX.strokeStyle='#dc3545'; VX.lineWidth=4;
-  VX.beginPath();
-  VX.moveTo(m.x0,m.yRef+state.slope*(m.x0-state.xr));
-  VX.lineTo(m.x1,m.yRef+state.slope*(m.x1-state.xr));
-  VX.stroke();
+  if(m){
+    VX.strokeStyle='#dc3545'; VX.lineWidth=4;
+    VX.beginPath();
+    VX.moveTo(m.x0,m.yRef+state.slope*(m.x0-state.xr));
+    VX.lineTo(m.x1,m.yRef+state.slope*(m.x1-state.xr));
+    VX.stroke();
+  }
 }
 
 /* ---------- registros ---------- */
 function saveRecord(){
   if(!state) return;
-  /* o valor salvo é o que está no campo — a conferência humana prevalece */
-  let vol=Math.round(Number($('rVol').value));
-  if(!Number.isFinite(vol)||vol<0){ msg('Informe um volume válido antes de salvar.','err'); return; }
-  vol=Math.min(state.config.max, Math.round(vol/state.config.step)*state.config.step);
+  /* o valor salvo é o que está no campo — a conferência humana prevalece,
+     e no modo manual ela é a única fonte */
+  const bruto=String($('rVol').value).trim().replace(',','.');
+  let vol=Math.round(Number(bruto));
+  if(bruto==='' || !Number.isFinite(vol) || vol<0){
+    msg('Informe o volume em mL antes de salvar.','err');
+    $('rVol').focus(); return;
+  }
+  /* o número digitado é respeitado como está: quem confere está lendo o
+     coletor com os próprios olhos e pode ler entre dois traços. Só limita
+     ao máximo declarado. */
+  if(state.config.max) vol=Math.min(state.config.max,vol);
+
+  const quando = $('rWhen').value ? new Date($('rWhen').value) : state.when;
+  if(isNaN(quando.getTime())){ msg('Data/hora inválida.','err'); $('rWhen').focus(); return; }
+
   const emptied = $('sEmpty').value === '1';
   const sy=[];
   if($('s1').checked) sy.push('Disúria');
@@ -1071,12 +1238,32 @@ function saveRecord(){
   if($('s3').checked) sy.push('Dor lombar');
   if($('s4').checked) sy.push('Sede intensa');
   sy.push($('sOdor').value);
-  records.push({t:state.when.getTime(), vol, colorName:state.col.name,
-                colorHex:state.col.hex, sy:sy.join(', '), emptied, nivel:state.nivel});
+  const meta=state.meta||{};
+  const editada = Math.abs(quando.getTime()-state.when.getTime())>60000;
+  records.push({t:quando.getTime(), vol, colorName:state.col.name,
+                colorHex:state.col.hex, sy:sy.join(', '), emptied, nivel:state.nivel,
+                origemData: editada ? 'informada na conferência' : (meta.origem||'horário atual'),
+                aparelho: meta.aparelho||''});
   records.sort((a,b)=>a.t-b.t);
   persist(); render();
+  state=null;
   $('secResult').classList.add('hide');
+  $('rVol').placeholder='';
+  ['s1','s2','s3','s4'].forEach(i=>$(i).checked=false);
   msg('Registro salvo.','ok');
+}
+
+/* medida sem foto: entra direto no modo manual */
+function medidaManual(){
+  img=null;
+  V.width=520; V.height=380;
+  VX.fillStyle='#111'; VX.fillRect(0,0,V.width,V.height);
+  VX.fillStyle='#6c757d'; VX.font='14px sans-serif';
+  VX.fillText('Registro sem foto',16,28);
+  const cfg=collectorConfig();
+  modoManual({when:new Date(),origem:'horário atual (registro sem foto)',aparelho:null},'Registro sem foto.',
+             ['Nenhuma imagem foi processada — o volume é o que você leu no coletor.'],
+             {w:V.width,h:V.height,config:cfg.ok?cfg:null});
 }
 
 /* diurese = o que foi produzido desde a medida anterior. */
@@ -1097,7 +1284,11 @@ function render(){
   tb.innerHTML='';
   rows.forEach(r=>{
     const tr=document.createElement('tr');
-    tr.innerHTML = `<td>${new Date(r.t).toLocaleString('pt-BR')}</td>
+    const orig=(r.origemData||'');
+    const selo = /EXIF/.test(orig) ? ' <small class="mut" title="horário vindo do EXIF da foto">EXIF</small>'
+               : /nome do arquivo/.test(orig) ? ' <small class="mut" title="horário vindo do nome do arquivo">arquivo</small>'
+               : '';
+    tr.innerHTML = `<td>${new Date(r.t).toLocaleString('pt-BR')}${selo}</td>
       <td><b>≈ ${r.vol} mL</b>${r.nivel&&r.nivel!=='alta'?` <small class="mut">(${r.nivel})</small>`:''}</td>
       <td>${r.diur===null?'—':(r.diur<0?'<span style="color:#dc3545">negativa</span>':r.diur+' mL')}</td>
       <td>${r.deb===null?'—':r.deb.toFixed(2)}</td>
@@ -1142,9 +1333,11 @@ function chart(rows){
 
 function exportCSV(){
   const rows=computed();
-  let csv='data_hora,volume_aproximado_mL,confianca,diurese_mL,debito_mL_kg_h,coloracao,sinais,esvaziado\n';
+  let csv='data_hora,origem_data_hora,aparelho,volume_mL,confianca,diurese_mL,'+
+          'debito_mL_kg_h,coloracao,sinais,esvaziado\n';
   rows.forEach(r=>{
-    csv+=`"${new Date(r.t).toISOString()}",${r.vol},"${r.nivel||''}",${r.diur??''},`+
+    csv+=`"${new Date(r.t).toISOString()}","${r.origemData||''}","${r.aparelho||''}",`+
+         `${r.vol},"${r.nivel||''}",${r.diur??''},`+
          `${r.deb!=null?r.deb.toFixed(2):''},"${r.colorName}","${r.sy}",${r.emptied?'sim':'nao'}\n`;
   });
   const a=document.createElement('a');

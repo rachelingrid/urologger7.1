@@ -33,17 +33,52 @@ O volume é sempre arredondado para baixo, para o traço inferior da escala.
 | **alta** | traços regulares + números confirmados por OCR + menisco em ≥2 faixas |
 | **média** | traços regulares + menisco, ancorados no fundo do coletor e conferidos contra a altura total |
 | **baixa** | apenas bordas do coletor + menisco (regra de 3 na altura) |
+| **manual** | a leitura automática não saiu; o volume foi digitado |
 
 O valor proposto aparece num campo editável. **O que é salvo é o que a pessoa
-confirma** — o aplicativo propõe, não decide.
+confirma** — o aplicativo propõe, não decide. O número digitado é gravado
+exatamente como digitado, sem arredondar para a escala.
+
+### Quando a leitura automática não sai
+
+Nenhuma foto é descartada. A tela de conferência abre do mesmo jeito, com o
+campo de volume vazio para digitação, e o registro vale como qualquer outro,
+marcado como **manual**. Junto vem o diagnóstico do que falhou — nitidez
+medida, proporção do coletor no quadro, número de traços encontrados, números
+lidos pelo OCR, faixas em que o nível foi confirmado —, que serve tanto para
+corrigir a próxima captura quanto para ajustar os limiares do código.
+
+### Data e hora: os metadados da foto são aproveitados
+
+Mesmo quando a leitura automática não sai, a foto continua valendo como
+documento. O que ela carrega é aproveitado — **só o volume é digitado**:
+
+| Do que vem | Como |
+|---|---|
+| data e hora | `DateTimeOriginal` do EXIF; se faltar, o padrão `AAAAMMDD_HHMM` do nome do arquivo; se faltar, a data do arquivo |
+| aparelho | `Make` e `Model` do EXIF, gravados no registro e no CSV |
+| coloração | estimada do terço inferior do coletor na própria imagem |
+
+A origem do horário fica declarada na tela e no CSV, e o campo continua
+editável. Isso importa porque EXIF não sobrevive a WhatsApp nem a cópia entre
+aparelhos: quando o horário vem da data do arquivo em vez do EXIF, ele pode ser
+o da cópia, e uma data errada contamina o débito, que depende do intervalo
+entre medidas. Declarar a procedência deixa isso visível em vez de silencioso.
+Foto HEIC (iPhone) não traz EXIF legível aqui e cai para o nome do arquivo.
+
+O botão **Registrar sem foto** é o único caso sem metadado: usa o horário
+atual, também editável.
 
 ## Crivo de qualidade da imagem
 
 Antes de medir: variância do laplaciano (nitidez), histograma (sub e
 superexposição) e inclinação dos próprios traços, com limite de 3° em relação
-à horizontal.
+à horizontal. Reprovar em qualquer um desses critérios não descarta a foto —
+leva ao modo manual, com o motivo declarado.
 
 ## Débito urinário
+
+O débito é calculado igual para registros automáticos e manuais.
 
 A diurese de cada registro é o que foi produzido desde a medida anterior: o
 próprio volume se o coletor foi esvaziado na medida anterior, ou a diferença
